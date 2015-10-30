@@ -213,7 +213,7 @@ namespace Bend.Util {
         }
 
         public override void handlePOSTRequest(HttpProcessor p, StreamReader inputData) {
-            Console.WriteLine("POST request: {0}", p.http_url);
+            Console.WriteLine("POST request:  {0}", p.http_url);
             string data = inputData.ReadToEnd();
 
             p.outputStream.WriteLine("<html><body><h1>test server</h1>");
