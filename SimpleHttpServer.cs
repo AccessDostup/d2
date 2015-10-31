@@ -115,7 +115,7 @@ namespace Bend.Util {
 
         public void handleGETRequest() {
             GETDATA(this);
-            srv.handleGETRequest(this);
+            srv.route(this);
         }
 
         private const int BUF_SIZE = 4096;
@@ -158,7 +158,7 @@ namespace Bend.Util {
             POSTDATA(new StreamReader(ms));
             GETDATA(this);
             Console.WriteLine("get post data end");
-            srv.handlePOSTRequest(this, new StreamReader(ms));
+            srv.route(this);
 
         }
 
@@ -226,38 +226,36 @@ namespace Bend.Util {
             }
         }
 
-        public abstract void handleGETRequest(HttpProcessor p);
-        public abstract void handlePOSTRequest(HttpProcessor p, StreamReader inputData);
-    }
+        public abstract void route(HttpProcessor p);
+   }
 
     public class MyHttpServer : HttpServer {
         public MyHttpServer(int port)
             : base(port) {
         }
-        public override void handleGETRequest(HttpProcessor p) {
-            Console.WriteLine("request: {0}", p.http_url);
-            p.writeSuccess();
-            p.outputStream.WriteLine("<html><body><h1>test server</h1>");
-            p.outputStream.WriteLine("Current Time: " + DateTime.Now.ToString());
-            p.outputStream.WriteLine("url : {0}", p.http_url);
+        // Убираем старую версию распределения запросов и делаем ниже новую машрузитацию
+        public override void route(HttpProcessor p)
+        {
+            string RoutePath = p.http_url;
+            if (RoutePath.IndexOf('/') != -1)
+                RoutePath = RoutePath.Substring(RoutePath.IndexOf('/') + 1);
+            if (RoutePath.IndexOf('?') != -1)
+                RoutePath = RoutePath.Remove(RoutePath.IndexOf('?'));
 
-            p.outputStream.WriteLine("<form method=post action=/form >");
-            p.outputStream.WriteLine("<input type=text name=foo value=foovalue>");
-            p.outputStream.WriteLine("<input type=submit name=bar value=barvalue>");
-            p.outputStream.WriteLine("</form>");
+            RouterProcedure mc = new RouterProcedure();
+            System.Reflection.MethodInfo m = mc.GetType().GetMethod("index");
+            m.Invoke(mc, null);
         }
 
-        public override void handlePOSTRequest(HttpProcessor p, StreamReader inputData) {
-            Console.WriteLine("POST request:  {0}", p.http_url);
-            string data = inputData.ReadToEnd();
-
+    }
+    public class RouterProcedure
+    {
+        public void index(HttpProcessor p)
+        {
             p.outputStream.WriteLine("<html><body><h1>test server</h1>");
-            p.outputStream.WriteLine("<a href=/test>return</a><p>");
-            p.outputStream.WriteLine("postbody: <pre>{0}</pre>", data);
-            
-
         }
     }
+
 
     public class TestMain {
         public static int Main(String[] args) {
