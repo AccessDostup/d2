@@ -20,6 +20,10 @@ namespace Bend.Util {
         private Stream inputStream;
         public StreamWriter outputStream;
 
+        //Здесь буду храниться данные переданные браузером серверу POST & GET
+        public Hashtable MasInputPost = new Hashtable();
+        public Hashtable MasInputGet = new Hashtable();
+
         public String http_method;
         public String http_url;
         public String http_protocol_versionstring;
@@ -110,6 +114,7 @@ namespace Bend.Util {
         }
 
         public void handleGETRequest() {
+            GETDATA(this);
             srv.handleGETRequest(this);
         }
 
@@ -150,9 +155,39 @@ namespace Bend.Util {
                  }
                  ms.Seek(0, SeekOrigin.Begin);
             }
+            POSTDATA(new StreamReader(ms));
+            GETDATA(this);
             Console.WriteLine("get post data end");
             srv.handlePOSTRequest(this, new StreamReader(ms));
 
+        }
+
+        private void POSTDATA(StreamReader inputData)
+        {
+            //Разделяем POST на ключ=значение
+            string[] data = inputData.ReadToEnd().Split('&');
+            //Переводим данные POST в ключ -> значение
+            foreach (string i in data)
+            {
+                string[] InputPostTemp = i.Split('=');
+                MasInputPost.Add(InputPostTemp[0], InputPostTemp[1]);
+            }
+        }
+
+        private void GETDATA(HttpProcessor inputData)
+        {
+            string [] data;
+            //Разделяем POST на ключ=значение
+            if (inputData.http_url.IndexOf('?') != -1)
+            {
+                data = inputData.http_url.Substring(inputData.http_url.IndexOf('?') + 1).Split('&');
+                //Переводим данные POST в ключ -> значение
+                foreach (string i in data)
+                {
+                    string[] InputPostTemp = i.Split('=');
+                    MasInputGet.Add(InputPostTemp[0], InputPostTemp[1]);
+                }
+            }
         }
 
         public void writeSuccess() {
