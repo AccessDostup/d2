@@ -23,7 +23,16 @@ namespace Bend.Util {
         //Здесь буду храниться данные переданные браузером серверу POST & GET
         public Hashtable MasInputPost = new Hashtable();
         public Hashtable MasInputGet = new Hashtable();
-
+        //Структура шаблонов
+        public struct HTMLBody
+        {
+            public string Header;
+            public string Head;
+            public string Body;
+            public string Footer;
+        }
+        //Переменная шаблонов
+        public HTMLBody HTML;
         public String http_method;
         public String http_url;
         public String http_protocol_versionstring;
@@ -71,6 +80,7 @@ namespace Bend.Util {
             }
             outputStream.Flush();
             // bs.Flush(); // flush any remaining output
+            MasInputGet = null; MasInputPost = null;
             inputStream = null; outputStream = null; // bs = null;            
             socket.Close();             
         }
@@ -114,6 +124,7 @@ namespace Bend.Util {
         }
 
         public void handleGETRequest() {
+            //получение GET данных от пользователя
             GETDATA(this);
             srv.route(this);
         }
@@ -155,6 +166,7 @@ namespace Bend.Util {
                  }
                  ms.Seek(0, SeekOrigin.Begin);
             }
+            //Получение GET и POST данных от пользователя
             POSTDATA(new StreamReader(ms));
             GETDATA(this);
             Console.WriteLine("get post data end");
@@ -162,6 +174,7 @@ namespace Bend.Util {
 
         }
 
+        //Процедура вывода POST данных
         private void POSTDATA(StreamReader inputData)
         {
             //Разделяем POST на ключ=значение
@@ -174,6 +187,7 @@ namespace Bend.Util {
             }
         }
 
+        //Процедура вывода GET данных
         private void GETDATA(HttpProcessor inputData)
         {
             string [] data;
@@ -188,6 +202,42 @@ namespace Bend.Util {
                     MasInputGet.Add(InputPostTemp[0], InputPostTemp[1]);
                 }
             }
+        }
+
+        //Собираем и отправляем HTML результат пользователю
+        public void SendToUsers()
+        {
+            ReplaceMark();
+            //отправка заголовков
+            int len;
+            len = (HTML.Head != null) ? HTML.Head.Length : 0;
+            len += (HTML.Body != null) ? HTML.Body.Length : 0;
+            len += (HTML.Footer != null) ? HTML.Footer.Length : 0;
+            if (len > 0 & HTML.Header !="")
+            HTML.Header = HTML.Header.Replace("\n\n", "\nContent-Length:" + len + "\n\n");
+            outputStream.Write(HTML.Header);
+            //отправка HTML
+            
+            outputStream.Write(HTML.Head +  HTML.Body + HTML.Footer);
+        }
+
+        //Процедура для автозамены маркеров
+        private void ReplaceMark()
+        {
+            try
+            {
+                HTML.Head = HTML.Head.Replace("<%basepath%>", "http://localhost:8080");
+            }
+            catch (Exception)
+            {
+
+            }
+        }
+
+        public void redirect(string url)
+        {
+            HTML.Header = "HTTP/1.1 301 Moved Permanenrly\nLocation: " + url + "\n\n";
+            SendToUsers();
         }
 
         public void writeSuccess() {
@@ -215,7 +265,7 @@ namespace Bend.Util {
         }
 
         public void listen() {
-            listener = new TcpListener(port);
+            listener = new TcpListener(IPAddress.Any, port);
             listener.Start();
             while (is_active) {                
                 TcpClient s = listener.AcceptTcpClient();
@@ -236,23 +286,114 @@ namespace Bend.Util {
         // Убираем старую версию распределения запросов и делаем ниже новую машрузитацию
         public override void route(HttpProcessor p)
         {
+            
+            string ContentType = "text/html";
+            string Extension = "";
+            //Переменная для определения запуска процедуры т.е. если клиент ввел http://localhost/index -> вызовет процедуру RouterProcedure::index 
             string RoutePath = p.http_url;
+            //Убираем / в начале
             if (RoutePath.IndexOf('/') != -1)
                 RoutePath = RoutePath.Substring(RoutePath.IndexOf('/') + 1);
+            //если был GET запрос его тоже убираем
             if (RoutePath.IndexOf('?') != -1)
                 RoutePath = RoutePath.Remove(RoutePath.IndexOf('?'));
+            //проверяем на скачку файла т.е. если введено http://localhost/css/style.css, то передаем переменной Extension ".css"
+            if (RoutePath.IndexOf('.') != -1)
+                Extension = p.http_url.Substring(p.http_url.LastIndexOf('.'));
+            //Проверяем на скачку,если Extension больше 0, даем скачать файл
+            if (Extension.Length != 0)
+            {
+                switch (Extension)
+                {
+                    case ".css":
+                        ContentType = "text/css";
+                        break;
+                    case ".js":
+                        ContentType = "text/javascript";
+                        break;
+                    case ".jpg":
+                        ContentType = "image/jpeg";
+                        break;
+                    case ".jpeg":
+                    case ".png":
+                    case ".gif":
+                        ContentType = "image/" + Extension.Substring(1);
+                        break;
+                    default:
+                        if (Extension.Length > 1)
+                        {
+                            ContentType = "application/" + Extension.Substring(1);
+                        }
+                        else
+                        {
+                            ContentType = "application/unknown";
+                        }
+                        break;
+                }
+                FileStream FS;
+                try
+                {
+                    FS = new FileStream(@"C:\Users\ADMnet\Downloads\SimpleHttpServer\SimpleHttpServer\d2\d2"+ p.http_url, FileMode.Open, FileAccess.Read, FileShare.Read);
+                    // Буфер для хранения принятых от клиента данных
+                    byte[] Buffer = new byte[1024];
+                    // Переменная для хранения количества байт, принятых от клиента
+                    int Count;
+                    while (FS.Position < FS.Length)
+                    {
+                        // Читаем данные из файла
+                        Count = FS.Read(Buffer, 0, Buffer.Length);
+                        // И передаем их клиенту
+                        p.socket.GetStream().Write(Buffer, 0, Count);
+                    }
+                    
+                }
+                catch (Exception)
+                {
+                    // Если случилась ошибка, посылаем клиенту ошибку 500
+                    p.writeFailure();
+                    return;
+                }
+            }
+            else
+            {
+                //если происходит вызов http://localhost/index -> вызовет процедуру RouterProcedure::index
+                RouterProcedure mc = new RouterProcedure();
+                //если будет вызов http://localhost/index/login, то будет искать процедуру index, передаст в параметр а login
+                string[] MasRoutePathFormat = RoutePath.Split('/');
+                System.Reflection.MethodInfo m = mc.GetType().GetMethod(MasRoutePathFormat[0]);
+                //Запускаем и передаем параметр p
+                try
+                {
+                    m.Invoke(mc, new Object[] { p, MasRoutePathFormat });
+                } catch (Exception)
+                {
 
-            RouterProcedure mc = new RouterProcedure();
-            System.Reflection.MethodInfo m = mc.GetType().GetMethod("index");
-            m.Invoke(mc, null);
+                    p.redirect("http://localhost:8080/index");
+                    return;
+                }
+                //Добавляем в HTMl голову и низ
+                p.HTML.Head = System.IO.File.ReadAllText(@"C:\Users\ADMnet\Downloads\SimpleHttpServer\SimpleHttpServer\d2\d2\template/header.html");
+                p.HTML.Footer = System.IO.File.ReadAllText(@"C:\Users\ADMnet\Downloads\SimpleHttpServer\SimpleHttpServer\d2\d2\template/footer.html");
+                p.HTML.Header = "HTTP/1.1 200 OK\nContent-Type: " + ContentType + "\n\n";
+                //отправляем юзеру
+                p.SendToUsers();
+            }
         }
 
     }
+    //Класс вызовов процедур (http://localhost/index -> вызовет процедуру RouterProcedure::index)
     public class RouterProcedure
     {
-        public void index(HttpProcessor p)
+        public void index(HttpProcessor p, string[] route)
         {
-            p.outputStream.WriteLine("<html><body><h1>test server</h1>");
+         
+            p.outputStream.WriteLine(@"template/index.html");
+
+        }
+        public void login(HttpProcessor p, string[] route)
+        {
+            p.HTML.Body = System.IO.File.ReadAllText(@".\template/login.html");
+            p.HTML.Body += "<b>" + route[1] +"</b>";
         }
     }
 
