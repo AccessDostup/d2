@@ -4,6 +4,7 @@ using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
+using MySql.Data.MySqlClient;
 
 // offered to the public domain for any use with no restriction
 // and also with no warranty of any kind, please enjoy. - David Jeske. 
@@ -12,6 +13,37 @@ using System.Threading;
 // http://www.jmarshall.com/easy/http/
 
 namespace Bend.Util {
+
+    public class MySQLCon
+    {
+        string MySQL_host = "localhost";
+        string MySQL_port = "3306";
+        string MySQL_uid = "root";
+        string MySQL_pwd = "12345";
+
+        void conn()
+        {
+            // Создаем соединение.
+            MySqlConnection Connection = new MySqlConnection("Data Source=" + MySQL_host + ";Port=" + MySQL_port + ";User Id=" + MySQL_uid + ";Password=" + MySQL_pwd + ";");
+            MySqlCommand Query = new MySqlCommand(); // С помощью этого объекта выполняются запросы к БД
+            Query.Connection = Connection; // Присвоим объекту только что созданное соединение
+                try
+                {
+                    Console.WriteLine("Соединяюсь с сервером базы данных...");
+                    Connection.Open();// Соединяемся
+                }
+                catch (MySqlException SSDB_Exception)
+                {
+                    // Ошибка - выходим
+                    Console.WriteLine("Проверьте настройки соединения, не могу соединиться с базой данных!\nОшибка: " + SSDB_Exception.Message);
+                    return;
+                }
+
+            Console.WriteLine("OK");
+        }
+    }
+
+
 
     public class HttpProcessor {
         public TcpClient socket;        
@@ -333,7 +365,7 @@ namespace Bend.Util {
                 FileStream FS;
                 try
                 {
-                    FS = new FileStream(@"C:\Users\ADMnet\Downloads\SimpleHttpServer\SimpleHttpServer\d2\d2"+ p.http_url, FileMode.Open, FileAccess.Read, FileShare.Read);
+                    FS = new FileStream(@"C:\Project\Access\d2" + p.http_url, FileMode.Open, FileAccess.Read, FileShare.Read);
                     // Буфер для хранения принятых от клиента данных
                     byte[] Buffer = new byte[1024];
                     // Переменная для хранения количества байт, принятых от клиента
@@ -372,8 +404,8 @@ namespace Bend.Util {
                     return;
                 }
                 //Добавляем в HTMl голову и низ
-                p.HTML.Head = System.IO.File.ReadAllText(@"C:\Users\ADMnet\Downloads\SimpleHttpServer\SimpleHttpServer\d2\d2\template/header.html");
-                p.HTML.Footer = System.IO.File.ReadAllText(@"C:\Users\ADMnet\Downloads\SimpleHttpServer\SimpleHttpServer\d2\d2\template/footer.html");
+                p.HTML.Head = System.IO.File.ReadAllText(@"C:\Project\Access\d2\template/header.html");
+                p.HTML.Footer = System.IO.File.ReadAllText(@"C:\Project\Access\d2\template/footer.html");
                 p.HTML.Header = "HTTP/1.1 200 OK\nContent-Type: " + ContentType + "\n\n";
                 //отправляем юзеру
                 p.SendToUsers();
