@@ -48,8 +48,6 @@ namespace Bend.Util {
     public class HttpProcessor {
         public TcpClient socket;        
         public HttpServer srv;
-        public string ydalit;
-
         private Stream inputStream;
         public StreamWriter outputStream;
 
