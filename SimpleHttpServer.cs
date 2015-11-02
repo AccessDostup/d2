@@ -253,6 +253,18 @@ namespace Bend.Util {
             outputStream.Write(HTML.Head +  HTML.Body + HTML.Footer);
         }
 
+        //проверка на доступность переменной из MasInputPost если ее нет возвращает "null"
+        public string InputPOST(string name)
+        {
+            return (MasInputPost.ContainsKey(name)) ? MasInputPost[name].ToString() : "null";
+        }
+
+        //проверка на доступность переменной из MasInputGet если ее нет возвращает "null"
+        public string InputGET(string name)
+        {
+            return (MasInputGet.ContainsKey(name)) ? MasInputGet[name].ToString() : "null";
+        }
+
         //Процедура для автозамены маркеров
         private void ReplaceMark()
         {
