@@ -21,7 +21,7 @@ namespace Bend.Util {
         string MySQL_uid = "root";
         string MySQL_pwd = "12345";
 
-        void conn()
+        public bool conn()
         {
             // Создаем соединение.
             MySqlConnection Connection = new MySqlConnection("Data Source=" + MySQL_host + ";Port=" + MySQL_port + ";User Id=" + MySQL_uid + ";Password=" + MySQL_pwd + ";");
@@ -36,10 +36,11 @@ namespace Bend.Util {
                 {
                     // Ошибка - выходим
                     Console.WriteLine("Проверьте настройки соединения, не могу соединиться с базой данных!\nОшибка: " + SSDB_Exception.Message);
-                    return;
+                    return false;
                 }
 
             Console.WriteLine("OK");
+            return true;
         }
     }
 
@@ -317,7 +318,7 @@ namespace Bend.Util {
         // Убираем старую версию распределения запросов и делаем ниже новую машрузитацию
         public override void route(HttpProcessor p)
         {
-            
+
             string ContentType = "text/html";
             string Extension = "";
             //Переменная для определения запуска процедуры т.е. если клиент ввел http://localhost/index -> вызовет процедуру RouterProcedure::index 
@@ -415,14 +416,25 @@ namespace Bend.Util {
     //Класс вызовов процедур (http://localhost/index -> вызовет процедуру RouterProcedure::index)
     public class RouterProcedure
     {
+        public void registration(HttpProcessor p, string[] route)
+        {
+ /*           MySQLCon connect = new MySQLCon(); //переменная соединения с базой
+            p.HTML.Body = System.IO.File.ReadAllText(@".\template/reg.html");
+            p.HTML.Body += "<b>" + route[1] + "</b>";
+
+            p.MasInputPost.ContainsKey("");
+            p.MasInputPost.ContainsValue("");*/
+        }
+
         public void index(HttpProcessor p, string[] route)
         {
-         
+            MySQLCon connect = new MySQLCon(); //переменная соединения с базой
             p.outputStream.WriteLine(@"template/index.html");
-
+            connect.conn();
         }
         public void login(HttpProcessor p, string[] route)
         {
+            MySQLCon connect = new MySQLCon(); //переменная соединения с базой
             p.HTML.Body = System.IO.File.ReadAllText(@".\template/login.html");
             p.HTML.Body += "<b>" + route[1] +"</b>";
         }
@@ -431,6 +443,7 @@ namespace Bend.Util {
 
     public class TestMain {
         public static int Main(String[] args) {
+
             HttpServer httpServer;
             if (args.GetLength(0) > 0) {
                 httpServer = new MyHttpServer(Convert.ToInt16(args[0]));
