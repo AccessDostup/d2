@@ -61,7 +61,7 @@ namespace Bend.Util {
         //Структура шаблонов
         public struct HTMLBody
         {
-            public Hashtable Header = new Hashtable();
+            public Hashtable Header;
             public string Head;
             public string Body;
             public string Footer;
@@ -105,6 +105,8 @@ namespace Bend.Util {
             try {
                 parseRequest();
                 readHeaders();
+                //Инициализируем Header
+                HTML.Header = new Hashtable();
                 if (http_method.Equals("GET")) {
                     handleGETRequest();
                 } else if (http_method.Equals("POST")) {
