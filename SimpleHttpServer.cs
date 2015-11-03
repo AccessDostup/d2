@@ -20,17 +20,21 @@ namespace Bend.Util {
         string MySQL_port = "3306";
         string MySQL_uid = "root";
         string MySQL_pwd = "12345";
+        public MySqlDataReader MyReader;
+        MySqlConnection Connection;
+        MySqlCommand Query = new MySqlCommand();
 
         public bool conn()
         {
             // Создаем соединение.
-            MySqlConnection Connection = new MySqlConnection("Data Source=" + MySQL_host + ";Port=" + MySQL_port + ";User Id=" + MySQL_uid + ";Password=" + MySQL_pwd + ";");
-            MySqlCommand Query = new MySqlCommand(); // С помощью этого объекта выполняются запросы к БД
+            Connection = new MySqlConnection("Data Source=" + MySQL_host + ";Port=" + MySQL_port + ";User Id=" + MySQL_uid + ";Password=" + MySQL_pwd + ";");
             Query.Connection = Connection; // Присвоим объекту только что созданное соединение
                 try
                 {
                     Console.WriteLine("Соединяюсь с сервером базы данных...");
                     Connection.Open();// Соединяемся
+                    Query.CommandText = "USE Work_DB;";
+                    Query.ExecuteNonQuery();
                 }
                 catch (MySqlException SSDB_Exception)
                 {
@@ -42,6 +46,53 @@ namespace Bend.Util {
             Console.WriteLine("OK");
             return true;
         }
+
+        public void select(string QueryStr)
+        {    
+            Query.CommandText = QueryStr;
+            MyReader = Query.ExecuteReader();// Запрос, подразумевающий чтение данных из таблиц.
+            Query.Dispose();
+        }
+
+        public bool insert_update(string QueryStr)
+        {
+            Query.CommandText = QueryStr;
+            bool outt = (Query.ExecuteNonQuery() > 0) ? true : false;
+            Query.Dispose();
+
+            return outt;
+            
+        }
+
+        public void close()
+        {
+            MyReader.Close();
+            Connection.Close();
+            
+
+        }
+// ////////////////////////////////////////////////////////////////////
+    /*          Console.WriteLine("\nЧтение данных...\nID - Модель авто - Привод - Руль - Коробка передач");
+                Query.CommandText = "SELECT * FROM " + MySQL_tbname + ";";
+                MySqlDataReader MyReader = Query.ExecuteReader();// Запрос, подразумевающий чтение данных из таблиц.
+                while (MyReader.Read())// Читаем
+                {
+                     // Каждое значение вытягиваем с помощью MySqlDataReader.GetValue(<номер значения в выборке>)
+                    Console.WriteLine("{0} - {1} - {2} - {3} - {4}", MyReader.GetValue(0), MyReader.GetValue(1), MyReader.GetValue(2), MyReader.GetValue(3), MyReader.GetValue(4));
+                }
+/////////////////////////////////////////////////////////////////////////
+Выгружаем ресурсы, закрываем соединение:
+MyReader.Close();
+Query.Dispose();
+Connection.Close();
+        
+    Query.CommandText = "INSERT INTO " + MySQL_tbname + " VALUES(NULL, '" + models[i] + "','" + drives[i] + "','" + rudders[i] + "','" + gearboxes[i] + "');";
+    Query.ExecuteNonQuery();
+
+        */
+/////////////////////////////////////////////////
+
+
     }
 
 
@@ -209,13 +260,17 @@ namespace Bend.Util {
         //Процедура вывода POST данных
         private void POSTDATA(StreamReader inputData)
         {
+            string str = inputData.ReadToEnd();
+            if (str != "")
+            {
             //Разделяем POST на ключ=значение
-            string[] data = inputData.ReadToEnd().Split('&');
+            string[] data = str.Split('&');
             //Переводим данные POST в ключ -> значение
             foreach (string i in data)
             {
                 string[] InputPostTemp = i.Split('=');
                 MasInputPost.Add(InputPostTemp[0], InputPostTemp[1]);
+            }
             }
         }
 
@@ -428,6 +483,8 @@ namespace Bend.Util {
     //Класс вызовов процедур (http://localhost/index -> вызовет процедуру RouterProcedure::index)
     public class RouterProcedure
     {
+        MySQLCon connect = new MySQLCon(); //переменная соединения с базой
+
         public void registration(HttpProcessor p, string[] route)
         {
  /*           MySQLCon connect = new MySQLCon(); //переменная соединения с базой
@@ -440,15 +497,25 @@ namespace Bend.Util {
 
         public void index(HttpProcessor p, string[] route)
         {
-            MySQLCon connect = new MySQLCon(); //переменная соединения с базой
-            p.outputStream.WriteLine(@"template/index.html");
             connect.conn();
+            p.HTML.Body = System.IO.File.ReadAllText(@"C:\Project\Access\d2\template/index.html");
+            connect.select("select * from users");
+
+            while (connect.MyReader.Read())// Читаем
+            {
+                // Каждое значение вытягиваем с помощью MySqlDataReader.GetValue(<номер значения в выборке>)
+                p.HTML.Body += "{0} - {1} - {2} - {3}" + connect.MyReader.GetValue(0) + connect.MyReader.GetValue(1) + connect.MyReader.GetValue(2) + connect.MyReader.GetValue(3);
+           }
+            connect.close();
         }
         public void login(HttpProcessor p, string[] route)
         {
-            MySQLCon connect = new MySQLCon(); //переменная соединения с базой
-            p.HTML.Body = System.IO.File.ReadAllText(@".\template/login.html");
-            p.HTML.Body += "<b>" + route[1] +"</b>";
+            connect.conn();
+            if (p.InputPOST("Password") != "null" & p.InputPOST("Username") != "null")
+                connect.insert_update("INSERT INTO users (`login`, `pass`) VALUES('" + p.InputPOST("Username") + "', '" + p.InputPOST("Password") + "');");
+            p.HTML.Body = System.IO.File.ReadAllText(@"C:\Project\Access\d2\\template/login.html");
+            //p.HTML.Body += "<b>" + route[1] +"</b>";
+            connect.close();
         }
     }
 
