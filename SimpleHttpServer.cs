@@ -5,6 +5,9 @@ using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using MySql.Data.MySqlClient;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
 
 // offered to the public domain for any use with no restriction
 // and also with no warranty of any kind, please enjoy. - David Jeske. 
@@ -58,11 +61,12 @@ namespace Bend.Util {
         //Структура шаблонов
         public struct HTMLBody
         {
-            public string Header;
+            public Hashtable Header = new Hashtable();
             public string Head;
             public string Body;
             public string Footer;
         }
+
         //Переменная шаблонов
         public HTMLBody HTML;
         public String http_method;
@@ -150,6 +154,7 @@ namespace Bend.Util {
                 }
                     
                 string value = line.Substring(pos, line.Length - pos);
+ 
                 Console.WriteLine("header: {0}:{1}",name,value);
                 httpHeaders[name] = value;
             }
@@ -236,20 +241,34 @@ namespace Bend.Util {
             }
         }
 
+        private void parsecookie(string val)
+        {
+
+        }
+
         //Собираем и отправляем HTML результат пользователю
         public void SendToUsers()
         {
             ReplaceMark();
             //отправка заголовков
             int len;
+            string CompilHeader = "";
+            //Для передачи HTML браузеру необходимо указать длину, считаем все.
             len = (HTML.Head != null) ? HTML.Head.Length : 0;
             len += (HTML.Body != null) ? HTML.Body.Length : 0;
             len += (HTML.Footer != null) ? HTML.Footer.Length : 0;
-            if (len > 0 & HTML.Header !="")
-            HTML.Header = HTML.Header.Replace("\n\n", "\nContent-Length:" + len + "\n\n");
-            outputStream.Write(HTML.Header);
+            //если длина больше и заголовок не равено 0 то добавить длину
+            if (len > 0 & HTML.Header.Count != 0)
+                HTML.Header.Add("Content-Length:", len);
+            //Считываем ключ и значение и собираем заголовок
+            foreach (DictionaryEntry s in HTML.Header.Values)
+            {
+                CompilHeader += s.Key + "" + s.Value + "\n";
+            }
+            //Отправка заголовка
+               outputStream.Write(CompilHeader + "\n");
+
             //отправка HTML
-            
             outputStream.Write(HTML.Head +  HTML.Body + HTML.Footer);
         }
 
@@ -280,7 +299,8 @@ namespace Bend.Util {
 
         public void redirect(string url)
         {
-            HTML.Header = "HTTP/1.1 301 Moved Permanenrly\nLocation: " + url + "\n\n";
+            HTML.Header.Add("HTTP/1.1", "301 Moved Permanenrly");
+            HTML.Header.Add("Location: ", url);
             SendToUsers();
         }
 
@@ -327,6 +347,13 @@ namespace Bend.Util {
         public MyHttpServer(int port)
             : base(port) {
         }
+
+        char Simbol(int num)
+        {
+            if (num < 0 || num >= 26) throw new IndexOutOfRangeException();
+            return "ABCDEFGHIJKLMNOPQRSTUVWXYZ"[num];
+        }
+
         // Убираем старую версию распределения запросов и делаем ниже новую машрузитацию
         public override void route(HttpProcessor p)
         {
@@ -400,6 +427,8 @@ namespace Bend.Util {
             }
             else
             {
+                if (p.httpHeaders["Cookie"].ToString() != "")
+                    p.HTML.Header.Add("Set-Cookie", "id=" + Simbol(26));
                 //если происходит вызов http://localhost/index -> вызовет процедуру RouterProcedure::index
                 RouterProcedure mc = new RouterProcedure();
                 //если будет вызов http://localhost/index/login, то будет искать процедуру index, передаст в параметр а login
@@ -418,7 +447,6 @@ namespace Bend.Util {
                 //Добавляем в HTMl голову и низ
                 p.HTML.Head = System.IO.File.ReadAllText(@"C:\Project\Access\d2\template/header.html");
                 p.HTML.Footer = System.IO.File.ReadAllText(@"C:\Project\Access\d2\template/footer.html");
-                p.HTML.Header = "HTTP/1.1 200 OK\nContent-Type: " + ContentType + "\n\n";
                 //отправляем юзеру
                 p.SendToUsers();
             }
