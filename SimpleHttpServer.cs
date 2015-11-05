@@ -39,7 +39,7 @@ namespace Bend.Util {
                     Query.CommandText = "USE Work_DB;";
                     Query.ExecuteNonQuery();
                 }
-                catch (MySqlException SSDB_Exception)
+                catch (Exception SSDB_Exception)
                 {
                     // Ошибка - выходим
                     Console.WriteLine("Проверьте настройки соединения, не могу соединиться с базой данных!\nОшибка: " + SSDB_Exception.Message);
@@ -50,29 +50,52 @@ namespace Bend.Util {
             return true;
         }
 
-        public void select(string QueryStr)
-        {    
-            Query.CommandText = QueryStr;
-            MyReader = Query.ExecuteReader();// Запрос, подразумевающий чтение данных из таблиц.
-            Query.Dispose();
+        public bool select(string QueryStr)
+        {
+            try
+            {
+                Query.CommandText = QueryStr;
+                MyReader = Query.ExecuteReader();// Запрос, подразумевающий чтение данных из таблиц.
+                Query.Dispose();
+                return (MyReader.FieldCount > 0) ? true : false;
+            }
+            catch (Exception SSDB_Exception)
+            {
+                // Ошибка - выходим
+                Console.WriteLine("Проверьте настройки соединения, не могу соединиться с базой данных!\nОшибка: " + SSDB_Exception.Message);
+                return false;
+            }
         }
 
         public bool insert_update(string QueryStr)
         {
-            Query.CommandText = QueryStr;
-            bool outt = (Query.ExecuteNonQuery() > 0) ? true : false;
-            Query.Dispose();
+            try
+            {
+                Query.CommandText = QueryStr;
+                bool outt = (Query.ExecuteNonQuery() > 0) ? true : false;
+                Query.Dispose();
 
-            return outt;
+                return outt;
+            }
+            catch (MySqlException SSDB_Exception)
+            {
+                // Ошибка - выходим
+                Console.WriteLine("Проверьте настройки соединения, не могу соединиться с базой данных!\nОшибка: " + SSDB_Exception.Message);
+                return false;
+            }
             
         }
 
         public void close()
         {
-            MyReader.Close();
-            Connection.Close();
-            
-
+            try
+            {
+                Connection.Close();
+                MyReader.Close();
+            }
+            catch (Exception)
+            {
+            }
         }
 // ////////////////////////////////////////////////////////////////////
     /*          Console.WriteLine("\nЧтение данных...\nID - Модель авто - Привод - Руль - Коробка передач");
@@ -405,10 +428,16 @@ Connection.Close();
             : base(port) {
         }
 
-        char Simbol(int num)
+        string Simbol(int count)
         {
-            if (num < 0 || num >= 26) throw new IndexOutOfRangeException();
-            return "ABCDEFGHIJKLMNOPQRSTUVWXYZ"[num];
+            string str = "";
+            Random rnd = new Random();
+            for (int i = 0; i < count; i++)
+            {
+                char ch = Convert.ToChar(rnd.Next(97, 122));
+                str += ch;
+            }
+            return str;
         }
 
         // Убираем старую версию распределения запросов и делаем ниже новую машрузитацию
@@ -484,8 +513,8 @@ Connection.Close();
             }
             else
             {
-                if (p.httpHeaders["Cookie"].ToString() != "")
-                    p.HTML.Header.Add("Set-Cookie", "id=" + Simbol(26));
+                if (!p.httpHeaders.ContainsKey("Cookie"))
+                    p.HTML.Header.Add("Set-Cookie", "id=" + Simbol(46));
                 //если происходит вызов http://localhost/index -> вызовет процедуру RouterProcedure::index
                 RouterProcedure mc = new RouterProcedure();
                 //если будет вызов http://localhost/index/login, то будет искать процедуру index, передаст в параметр а login
@@ -530,12 +559,14 @@ Connection.Close();
             connect.conn();
             p.HTML.Body = System.IO.File.ReadAllText(@"C:\Project\Access\d2\template/index.html");
             connect.select("select * from users");
-
-            while (connect.MyReader.Read())// Читаем
+            if (connect.select("select * from users"))
             {
-                // Каждое значение вытягиваем с помощью MySqlDataReader.GetValue(<номер значения в выборке>)
-                p.HTML.Body += "{0} - {1} - {2} - {3}" + connect.MyReader.GetValue(0) + connect.MyReader.GetValue(1) + connect.MyReader.GetValue(2) + connect.MyReader.GetValue(3);
-           }
+                while (connect.MyReader.Read())// Читаем
+                {
+                    // Каждое значение вытягиваем с помощью MySqlDataReader.GetValue(<номер значения в выборке>)
+                    p.HTML.Body += "{0} - {1} - {2} - {3}" + connect.MyReader.GetValue(0) + connect.MyReader.GetValue(1) + connect.MyReader.GetValue(2) + connect.MyReader.GetValue(3);
+                }
+            }
             connect.close();
         }
         public void login(HttpProcessor p, string[] route)
