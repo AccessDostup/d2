@@ -31,14 +31,12 @@ namespace Bend.Util {
         public bool conn()
         {
             // Создаем соединение.
-            Connection = new MySqlConnection("Database=" + MySQL_name + ";"Data Source=" + MySQL_host + ";Port=" + MySQL_port + ";User Id=" + MySQL_uid + ";Password=" + MySQL_pwd + ";");
+            Connection = new MySqlConnection("Database=" + MySQL_name + "; Data Source=" + MySQL_host + ";Port=" + MySQL_port + ";User Id=" + MySQL_uid + ";Password=" + MySQL_pwd + ";");
             Query.Connection = Connection; // Присвоим объекту только что созданное соединение
                 try
                 {
                     Console.WriteLine("Соединяюсь с сервером базы данных...");
                     Connection.Open();// Соединяемся
-   //                Query.CommandText = "USE work_db;";
-                    Query.ExecuteNonQuery();
                 }
                 catch (Exception SSDB_Exception)
                 {
@@ -342,9 +340,16 @@ Connection.Close();
             if (len > 0 & HTML.Header.Count != 0)
                 HTML.Header.Add("Content-Length:", len);
             //Считываем ключ и значение и собираем заголовок
-            foreach (DictionaryEntry s in HTML.Header.Values)
+            foreach (DictionaryEntry s in HTML.Header)
             {
-                CompilHeader += s.Key + "" + s.Value + "\n";
+                if (s.Key.ToString().IndexOf("HTTP") < 0)
+                {
+                    CompilHeader += s.Key + " " + s.Value + "\n";
+                }
+                else
+                {
+                    CompilHeader = s.Key + " " + s.Value + "\n" + CompilHeader;
+                }
             }
             //Отправка заголовка
                outputStream.Write(CompilHeader + "\n");
@@ -530,7 +535,7 @@ Connection.Close();
 
                     p.redirect("http://localhost:8080/index");
                     return;
-                }
+                } 
                 //Добавляем в HTMl голову и низ
                 p.HTML.Head = System.IO.File.ReadAllText(@"C:\Project\Access\d2\template/header.html");
                 p.HTML.Footer = System.IO.File.ReadAllText(@"C:\Project\Access\d2\template/footer.html");
@@ -557,9 +562,9 @@ Connection.Close();
 
         public void index(HttpProcessor p, string[] route)
         {
+            p.HTML.Header.Add("HTTP/1.1", "200 OK");
             connect.conn();
             p.HTML.Body = System.IO.File.ReadAllText(@"C:\Project\Access\d2\template/index.html");
-            connect.select("select * from users");
             if (connect.select("select * from users"))
             {
                 while (connect.MyReader.Read())// Читаем
@@ -570,8 +575,10 @@ Connection.Close();
             }
             connect.close();
         }
+
         public void login(HttpProcessor p, string[] route)
         {
+            p.HTML.Header.Add("HTTP/1.1", "200 OK");
             connect.conn();
             if (p.InputPOST("Password") != "null" & p.InputPOST("Username") != "null")
                 connect.insert_update("INSERT INTO users (`login`, `pass`) VALUES('" + p.InputPOST("Username") + "', '" + p.InputPOST("Password") + "');");
