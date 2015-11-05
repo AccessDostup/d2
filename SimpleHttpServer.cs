@@ -17,6 +17,91 @@ using System.Text;
 
 namespace Bend.Util {
 
+    //Сессии
+    public class Session:MyHttpServer
+    {
+        //здесь ид из cookie
+        string[] id;
+        //здесь хранятся сессии
+        Hashtable MasSession = new Hashtable();
+        
+        //начало сессии
+        public void start(HttpProcessor p)
+        {
+            //проверка на ид в куках
+            if (p.httpHeaders["Cookie"].ToString().IndexOf("id=") < 0)
+                return;
+            //вытаскиваем ид
+            id = p.httpHeaders["Cookie"].ToString().Split(new string [] {"id="}, StringSplitOptions.RemoveEmptyEntries);
+            //если в бд есть инфа про сессию то достаем, если нет заносим
+            if (connect.select("select `data` from `session` where `id`='" + id[0] + "';"))
+            {
+                parsing_data();
+            }
+            else
+            {
+                connect.insert_update("INSERT INTO `sessions` (`id`, `ip_address`, `timestamp`) VALUES('" + id[0] + "', '0.0.0.0','" + DateTime.Now.ToString("yyyyMMddHHmmssfff") + "');");
+            }
+        }
+
+        //добавление данных в сессию
+        public void add(string field, string value)
+        {
+            if (MasSession.ContainsKey(field))
+            {
+                MasSession[field] = value;
+            }
+            else
+            {
+                MasSession.Add(field,value);
+            }
+
+        }
+
+        //удалить данные из сессии
+        public bool del(string field)
+        {
+            if (MasSession.ContainsKey(field))
+            {
+                MasSession.Remove(field);
+                return true;
+            }
+
+            return false;
+        }
+
+        //отправка на хранение
+        public void push()
+        {
+            string str="";
+
+            foreach (DictionaryEntry s in MasSession)
+            {
+                if (s.Key.ToString().IndexOf("HTTP") < 0)
+                    str += s.Key + "=" + s.Value + ";";
+            }
+
+            connect.insert_update("UPDATE `sessions` set `timestamp`='" + DateTime.Now.ToString("yyyyMMddHHmmssfff") + "', `data`='" + str + "';");
+
+        }
+         
+        //парсинг данных из mysql  
+        void parsing_data()
+        {
+            while (connect.MyReader.Read())// Читаем
+            {
+                string[] TempData = connect.MyReader.GetValue(0).ToString().Split(new char[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
+
+                foreach (string s in TempData)
+                {
+                    string[] TempData2 = s.Split('=');
+                    MasSession.Add(TempData2[0], TempData2[1]);
+                }
+            }
+ 
+        }
+    }
+
     public class MySQLCon
     {
         string MySQL_name = "work_db";
@@ -119,8 +204,6 @@ Connection.Close();
 
 
     }
-
-
 
     public class HttpProcessor {
         public TcpClient socket;        
@@ -320,11 +403,6 @@ Connection.Close();
             }
         }
 
-        private void parsecookie(string val)
-        {
-
-        }
-
         //Собираем и отправляем HTML результат пользователю
         public void SendToUsers()
         {
@@ -383,6 +461,7 @@ Connection.Close();
             }
         }
 
+        //функция перенаправления 
         public void redirect(string url)
         {
             HTML.Header.Add("HTTP/1.1", "301 Moved Permanenrly");
@@ -405,7 +484,7 @@ Connection.Close();
     }
 
     public abstract class HttpServer {
-
+        
         protected int port;
         TcpListener listener;
         bool is_active = true;
@@ -430,10 +509,13 @@ Connection.Close();
    }
 
     public class MyHttpServer : HttpServer {
+        public MySQLCon connect = new MySQLCon(); //переменная соединения с базой
+        public Session Sessions= new Session(); 
         public MyHttpServer(int port)
             : base(port) {
         }
-
+        
+        //функция для созднии рандоманой строки
         string Simbol(int count)
         {
             string str = "";
@@ -519,17 +601,37 @@ Connection.Close();
             }
             else
             {
+                //запускаем соединение с mysql
+                connect.conn();
+                //если не было передано Cookie то создаем новое
                 if (!p.httpHeaders.ContainsKey("Cookie"))
-                    p.HTML.Header.Add("Set-Cookie", "id=" + Simbol(46));
+                {
+                    string randomstr;
+                    do
+                    {
+                        randomstr = Simbol(46);
+                    }
+                    while (connect.select("select `id` from `session` where `id`='" + randomstr + "';"));
+
+                    p.HTML.Header.Add("Set-Cookie:", "id=" + Simbol(46));
+                }
+                else
+                {
+                    Sessions.start(p);
+                }
+
                 //если происходит вызов http://localhost/index -> вызовет процедуру RouterProcedure::index
                 RouterProcedure mc = new RouterProcedure();
                 //если будет вызов http://localhost/index/login, то будет искать процедуру index, передаст в параметр а login
                 string[] MasRoutePathFormat = RoutePath.Split('/');
                 System.Reflection.MethodInfo m = mc.GetType().GetMethod(MasRoutePathFormat[0]);
-                //Запускаем и передаем параметр p
+                //Запускаем и передаем параметр:
+                //p-сервер,
+                //MasRoutePathFormat-путь по которуму пришел пользователь
+                //connect - mysql соединение
                 try
                 {
-                    m.Invoke(mc, new Object[] { p, MasRoutePathFormat });
+                    m.Invoke(mc, new Object[] { p, MasRoutePathFormat});
                 } catch (Exception)
                 {
 
@@ -541,18 +643,17 @@ Connection.Close();
                 p.HTML.Footer = System.IO.File.ReadAllText(@"C:\Project\Access\d2\template/footer.html");
                 //отправляем юзеру
                 p.SendToUsers();
+                connect.close();
             }
         }
 
     }
     //Класс вызовов процедур (http://localhost/index -> вызовет процедуру RouterProcedure::index)
-    public class RouterProcedure
+    public class RouterProcedure:MyHttpServer
     {
-        MySQLCon connect = new MySQLCon(); //переменная соединения с базой
-
         public void registration(HttpProcessor p, string[] route)
         {
- /*           MySQLCon connect = new MySQLCon(); //переменная соединения с базой
+ /*   
             p.HTML.Body = System.IO.File.ReadAllText(@".\template/reg.html");
             p.HTML.Body += "<b>" + route[1] + "</b>";
 
@@ -563,7 +664,6 @@ Connection.Close();
         public void index(HttpProcessor p, string[] route)
         {
             p.HTML.Header.Add("HTTP/1.1", "200 OK");
-            connect.conn();
             p.HTML.Body = System.IO.File.ReadAllText(@"C:\Project\Access\d2\template/index.html");
             if (connect.select("select * from users"))
             {
@@ -573,21 +673,17 @@ Connection.Close();
                     p.HTML.Body += "{0} - {1} - {2} - {3}" + connect.MyReader.GetValue(0) + connect.MyReader.GetValue(1) + connect.MyReader.GetValue(2) + connect.MyReader.GetValue(3);
                 }
             }
-            connect.close();
         }
 
         public void login(HttpProcessor p, string[] route)
         {
             p.HTML.Header.Add("HTTP/1.1", "200 OK");
-            connect.conn();
             if (p.InputPOST("Password") != "null" & p.InputPOST("Username") != "null")
                 connect.insert_update("INSERT INTO users (`login`, `pass`) VALUES('" + p.InputPOST("Username") + "', '" + p.InputPOST("Password") + "');");
             p.HTML.Body = System.IO.File.ReadAllText(@"C:\Project\Access\d2\\template/login.html");
             //p.HTML.Body += "<b>" + route[1] +"</b>";
-            connect.close();
         }
     }
-
 
     public class TestMain {
         public static int Main(String[] args) {
