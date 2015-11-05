@@ -19,7 +19,8 @@ namespace Bend.Util {
 
     public class MySQLCon
     {
-        string MySQL_host = "localhost";
+        string MySQL_name = "work_db";
+        string MySQL_host = "78.24.222.222";
         string MySQL_port = "3306";
         string MySQL_uid = "root";
         string MySQL_pwd = "12345";
@@ -30,13 +31,13 @@ namespace Bend.Util {
         public bool conn()
         {
             // Создаем соединение.
-            Connection = new MySqlConnection("Data Source=" + MySQL_host + ";Port=" + MySQL_port + ";User Id=" + MySQL_uid + ";Password=" + MySQL_pwd + ";");
+            Connection = new MySqlConnection("Database=" + MySQL_name + ";"Data Source=" + MySQL_host + ";Port=" + MySQL_port + ";User Id=" + MySQL_uid + ";Password=" + MySQL_pwd + ";");
             Query.Connection = Connection; // Присвоим объекту только что созданное соединение
                 try
                 {
                     Console.WriteLine("Соединяюсь с сервером базы данных...");
                     Connection.Open();// Соединяемся
-                    Query.CommandText = "USE Work_DB;";
+   //                Query.CommandText = "USE work_db;";
                     Query.ExecuteNonQuery();
                 }
                 catch (Exception SSDB_Exception)
