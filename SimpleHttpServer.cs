@@ -16,33 +16,76 @@ using System.Text;
 // http://www.jmarshall.com/easy/http/
 
 namespace Bend.Util {
-
+  
     //Сессии
-    public class Session:MyHttpServer
+    public class Session : HttpServer
     {
         //здесь ид из cookie
         string[] id;
         //здесь хранятся сессии
         Hashtable MasSession = new Hashtable();
-        
         //начало сессии
-        public void start(HttpProcessor p)
+        public Session(HttpProcessor p)
         {
-            //проверка на ид в куках
-            if (p.httpHeaders["Cookie"].ToString().IndexOf("id=") < 0)
-                return;
-            //вытаскиваем ид
-            id = p.httpHeaders["Cookie"].ToString().Split(new string [] {"id="}, StringSplitOptions.RemoveEmptyEntries);
+            delsession_time();
+            //если не было передано Cookie то создаем новое
+            if (!p.httpHeaders.ContainsKey("Cookie"))
+            {
+                //Создание сессии
+                create_session(p);
+            } else {
+                //проверка на ид в куках если есть то создаем сессию
+                if (p.httpHeaders["Cookie"].ToString().IndexOf("id=") < 0)
+                {
+                    create_session(p);
+                }
+                else
+                {
+                    //вытаскиваем ид
+                    id = p.httpHeaders["Cookie"].ToString().Split(new string[] { "id=" }, StringSplitOptions.RemoveEmptyEntries);
+                }
+            }
+
             //если в бд есть инфа про сессию то достаем, если нет заносим
-            if (connect.select("select `data` from `session` where `id`='" + id[0] + "';"))
+            if (connect.select("select `data` from `sessions` where `id`='" + id[0] + "';"))
             {
                 parsing_data();
             }
             else
             {
-                connect.insert_update("INSERT INTO `sessions` (`id`, `ip_address`, `timestamp`) VALUES('" + id[0] + "', '0.0.0.0','" + DateTime.Now.ToString("yyyyMMddHHmmssfff") + "');");
+                create_session(p);
             }
         }
+
+        //Создание сессии
+        private void create_session(HttpProcessor p)
+        {
+            do
+            {
+                id = new string[1];
+                id[0] = Simbol(46);
+            }
+            while (connect.insert_update("INSERT INTO `sessions` (`id`, `ip_address`, `timestamp`) VALUES('" + id[0] + "', '0.0.0.0', now());") == false);
+
+            p.HTML.Header.Add("Set-Cookie:", "id=" + id[0]);
+
+        }
+
+        public string item(string field)
+        {
+            return (MasSession.ContainsKey(field)) ? MasSession[field].ToString() : "null";
+        }
+
+        public void delsession_time()
+        {
+            connect.insert_update("DELETE FROM `sessions` WHERE TIMEDIFF(now(), `timestamp`) > TIME('00:15:00');");
+        }
+
+        public void exit()
+        {
+            connect.insert_update("DELETE FROM `sessions` WHERE `id`='" + MasSession["id"] + "';");
+        }
+
 
         //добавление данных в сессию
         public void add(string field, string value)
@@ -77,17 +120,18 @@ namespace Bend.Util {
 
             foreach (DictionaryEntry s in MasSession)
             {
-                if (s.Key.ToString().IndexOf("HTTP") < 0)
+                if (s.Key.ToString().IndexOf("HTTP") < 0 && s.Key.ToString().IndexOf("id") < 0)
                     str += s.Key + "=" + s.Value + ";";
             }
 
-            connect.insert_update("UPDATE `sessions` set `timestamp`='" + DateTime.Now.ToString("yyyyMMddHHmmssfff") + "', `data`='" + str + "';");
+            connect.insert_update("UPDATE `sessions` set `timestamp`= now(), `data`='" + str + "';");
 
         }
          
         //парсинг данных из mysql  
         void parsing_data()
         {
+            MasSession.Add("id", id[0]);
             while (connect.MyReader.Read())// Читаем
             {
                 string[] TempData = connect.MyReader.GetValue(0).ToString().Split(new char[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
@@ -111,10 +155,11 @@ namespace Bend.Util {
         string MySQL_pwd = "12345";
         public MySqlDataReader MyReader;
         MySqlConnection Connection;
-        MySqlCommand Query = new MySqlCommand();
+        MySqlCommand Query;
 
-        public bool conn()
+        private bool conn()
         {
+            Query = new MySqlCommand();
             // Создаем соединение.
             Connection = new MySqlConnection("Database=" + MySQL_name + "; Data Source=" + MySQL_host + ";Port=" + MySQL_port + ";User Id=" + MySQL_uid + ";Password=" + MySQL_pwd + ";");
             Query.Connection = Connection; // Присвоим объекту только что созданное соединение
@@ -133,20 +178,23 @@ namespace Bend.Util {
             Console.WriteLine("OK");
             return true;
         }
-
+        
         public bool select(string QueryStr)
         {
             try
             {
+                if (MyReader != null) if (!MyReader.IsClosed) MyReader.Close();
+                if (Connection == null || Connection.State != System.Data.ConnectionState.Open)
+                    conn();
                 Query.CommandText = QueryStr;
                 MyReader = Query.ExecuteReader();// Запрос, подразумевающий чтение данных из таблиц.
-                Query.Dispose();
-                return (MyReader.FieldCount > 0) ? true : false;
+                //Query.Dispose();
+                return MyReader.HasRows;
             }
             catch (Exception SSDB_Exception)
             {
                 // Ошибка - выходим
-                Console.WriteLine("Проверьте настройки соединения, не могу соединиться с базой данных!\nОшибка: " + SSDB_Exception.Message);
+                Console.WriteLine("Проверьте целостность базы данных!\nОшибка: " + SSDB_Exception.Message);
                 return false;
             }
         }
@@ -155,16 +203,19 @@ namespace Bend.Util {
         {
             try
             {
+                if (MyReader != null) if (!MyReader.IsClosed) MyReader.Close();
+                if (Connection == null || Connection.State != System.Data.ConnectionState.Open)
+                    conn();
                 Query.CommandText = QueryStr;
                 bool outt = (Query.ExecuteNonQuery() > 0) ? true : false;
-                Query.Dispose();
+                //Query.Dispose();
 
                 return outt;
             }
             catch (MySqlException SSDB_Exception)
             {
                 // Ошибка - выходим
-                Console.WriteLine("Проверьте настройки соединения, не могу соединиться с базой данных!\nОшибка: " + SSDB_Exception.Message);
+                Console.WriteLine("Проверьте целостность базы данных!\nОшибка: " + SSDB_Exception.Message);
                 return false;
             }
             
@@ -210,6 +261,14 @@ Connection.Close();
         public HttpServer srv;
         private Stream inputStream;
         public StreamWriter outputStream;
+        //Маркер который отмечается чтобы понять будет перенаправление или нет.
+        public struct MarkerRedirectType
+        {
+            public string url;
+            public bool status;
+        }
+
+        public MarkerRedirectType  MarkerRedirect;
 
         //Здесь буду храниться данные переданные браузером серверу POST & GET
         public Hashtable MasInputPost = new Hashtable();
@@ -218,9 +277,7 @@ Connection.Close();
         public struct HTMLBody
         {
             public Hashtable Header;
-            public string Head;
-            public string Body;
-            public string Footer;
+            public Hashtable Body;
         }
 
         //Переменная шаблонов
@@ -261,8 +318,10 @@ Connection.Close();
             try {
                 parseRequest();
                 readHeaders();
-                //Инициализируем Header
+                //Инициализируем Header и Body
                 HTML.Header = new Hashtable();
+                HTML.Body = new Hashtable();
+
                 if (http_method.Equals("GET")) {
                     handleGETRequest();
                 } else if (http_method.Equals("POST")) {
@@ -270,7 +329,8 @@ Connection.Close();
                 }
             } catch (Exception e) {
                 Console.WriteLine("Exception: " + e.ToString());
-                writeFailure();
+                outputStream.Write("HTTP/1.0 404 File not found\n");
+                outputStream.Write("Connection: close\n\n");
             }
             outputStream.Flush();
             // bs.Flush(); // flush any remaining output
@@ -404,19 +464,44 @@ Connection.Close();
         }
 
         //Собираем и отправляем HTML результат пользователю
-        public void SendToUsers()
+        public void SendToUsers(string nametemplate)
         {
-            ReplaceMark();
-            //отправка заголовков
-            int len;
+            //переменный для собора данных на отправку заголовков и HTML
             string CompilHeader = "";
-            //Для передачи HTML браузеру необходимо указать длину, считаем все.
-            len = (HTML.Head != null) ? HTML.Head.Length : 0;
-            len += (HTML.Body != null) ? HTML.Body.Length : 0;
-            len += (HTML.Footer != null) ? HTML.Footer.Length : 0;
-            //если длина больше и заголовок не равено 0 то добавить длину
-            if (len > 0 & HTML.Header.Count != 0)
-                HTML.Header.Add("Content-Length:", len);
+            string Compiltemplate = "";
+
+            //Если был выставлен Redirect то удалить все заголовки и HTML изменения и сделать перенаправление
+            if (MarkerRedirect.status)
+            {
+                HTML.Header.Clear();
+                HTML.Body.Clear();
+                HTML.Header.Add("HTTP/1.1", "301 Moved Permanenrly");
+                HTML.Header.Add("Location: ", MarkerRedirect.url);
+            }
+            else
+            {
+                HTML.Header.Add("HTTP/1.1", "200 OK");
+                //Добавляем в HTMl голову,тело, низ
+                Compiltemplate += System.IO.File.ReadAllText(@"C:\Project\Access\d2\template/header.html");
+                //проверяем на существование вызываемого шаблона страницы
+                if (System.IO.File.Exists(@"C:\Project\Access\d2\template/" + nametemplate + ".html"))
+                    Compiltemplate += System.IO.File.ReadAllText(@"C:\Project\Access\d2\template/" + nametemplate + ".html");
+                else Compiltemplate += "Нет такого файла";
+                
+                Compiltemplate += System.IO.File.ReadAllText(@"C:\Project\Access\d2\template/footer.html");
+
+                HTML.Body.Add("httppath","http://localhost:8080");
+                //Редактируем HTML заменой переменных данными
+                foreach (DictionaryEntry s in HTML.Body)
+                {
+                    Compiltemplate = Compiltemplate.Replace("{" + s.Key.ToString() + "}", s.Value.ToString());
+                }
+
+                //если длина больше и заголовок не равено 0 то добавить длину в заголовок
+                if (Compiltemplate.Length > 0 & HTML.Header.Count != 0)
+                    HTML.Header.Add("Content-Length:", Compiltemplate.Length);
+            }
+
             //Считываем ключ и значение и собираем заголовок
             foreach (DictionaryEntry s in HTML.Header)
             {
@@ -429,11 +514,9 @@ Connection.Close();
                     CompilHeader = s.Key + " " + s.Value + "\n" + CompilHeader;
                 }
             }
-            //Отправка заголовка
-               outputStream.Write(CompilHeader + "\n");
 
-            //отправка HTML
-            outputStream.Write(HTML.Head +  HTML.Body + HTML.Footer);
+            //Отправка данных
+            outputStream.Write(CompilHeader + "\n" + Compiltemplate);           
         }
 
         //проверка на доступность переменной из MasInputPost если ее нет возвращает "null"
@@ -448,48 +531,22 @@ Connection.Close();
             return (MasInputGet.ContainsKey(name)) ? MasInputGet[name].ToString() : "null";
         }
 
-        //Процедура для автозамены маркеров
-        private void ReplaceMark()
-        {
-            try
-            {
-                HTML.Head = HTML.Head.Replace("<%basepath%>", "http://localhost:8080");
-            }
-            catch (Exception)
-            {
-
-            }
-        }
-
         //функция перенаправления 
         public void redirect(string url)
         {
-            HTML.Header.Add("HTTP/1.1", "301 Moved Permanenrly");
-            HTML.Header.Add("Location: ", url);
-            SendToUsers();
-        }
-
-        public void writeSuccess() {
-            outputStream.Write("HTTP/1.0 200 OK\n");
-            outputStream.Write("Content-Type: text/html\n");
-            outputStream.Write("Connection: close\n");
-            outputStream.Write("\n");
-        }
-
-        public void writeFailure() {
-            outputStream.Write("HTTP/1.0 404 File not found\n");
-            outputStream.Write("Connection: close\n");
-            outputStream.Write("\n");
+            MarkerRedirect.status = true;
+            MarkerRedirect.url = url;
         }
     }
 
-    public abstract class HttpServer {
-        
+    public class HttpServer {
         protected int port;
         TcpListener listener;
         bool is_active = true;
+        public static MySQLCon connect = new MySQLCon(); //переменная соединения с базой
+        public static Session Sessions; 
        
-        public HttpServer(int port) {
+        public void HttpServerP(int port) {
             this.port = port;
         }
 
@@ -505,18 +562,8 @@ Connection.Close();
             }
         }
 
-        public abstract void route(HttpProcessor p);
-   }
-
-    public class MyHttpServer : HttpServer {
-        public MySQLCon connect = new MySQLCon(); //переменная соединения с базой
-        public Session Sessions= new Session(); 
-        public MyHttpServer(int port)
-            : base(port) {
-        }
-        
         //функция для созднии рандоманой строки
-        string Simbol(int count)
+        public string Simbol(int count)
         {
             string str = "";
             Random rnd = new Random();
@@ -529,7 +576,7 @@ Connection.Close();
         }
 
         // Убираем старую версию распределения запросов и делаем ниже новую машрузитацию
-        public override void route(HttpProcessor p)
+        public void route(HttpProcessor p)
         {
 
             string ContentType = "text/html";
@@ -576,12 +623,19 @@ Connection.Close();
                         break;
                 }
                 FileStream FS;
+
                 try
                 {
+                    
                     FS = new FileStream(@"C:\Project\Access\d2" + p.http_url, FileMode.Open, FileAccess.Read, FileShare.Read);
-                    // Буфер для хранения принятых от клиента данных
+                    //Отправка Заголовка.
+                    string Headers = "HTTP/1.1 200 OK\nContent-Type: " + ContentType + "\nContent-Length: " + FS.Length + "\n\n";
+                    byte[] HeadersBuffer = Encoding.ASCII.GetBytes(Headers);
+                    p.socket.GetStream().Write(HeadersBuffer, 0, HeadersBuffer.Length);
+
+                    // Буфер для отправки клиенту данных
                     byte[] Buffer = new byte[1024];
-                    // Переменная для хранения количества байт, принятых от клиента
+                    // Переменная для хранения количества байт, переданных клиенту
                     int Count;
                     while (FS.Position < FS.Length)
                     {
@@ -590,38 +644,23 @@ Connection.Close();
                         // И передаем их клиенту
                         p.socket.GetStream().Write(Buffer, 0, Count);
                     }
-                    
+
                 }
                 catch (Exception)
                 {
                     // Если случилась ошибка, посылаем клиенту ошибку 500
-                    p.writeFailure();
-                    return;
+                    p.outputStream.Write("HTTP/1.0 404 File not found\n");
+                    p.outputStream.Write("Connection: close\n\n");
                 }
+                
+                return;
             }
             else
             {
-                //запускаем соединение с mysql
-                connect.conn();
-                //если не было передано Cookie то создаем новое
-                if (!p.httpHeaders.ContainsKey("Cookie"))
-                {
-                    string randomstr;
-                    do
-                    {
-                        randomstr = Simbol(46);
-                    }
-                    while (connect.select("select `id` from `session` where `id`='" + randomstr + "';"));
-
-                    p.HTML.Header.Add("Set-Cookie:", "id=" + Simbol(46));
-                }
-                else
-                {
-                    Sessions.start(p);
-                }
-
+                Sessions = new Session(p);
                 //если происходит вызов http://localhost/index -> вызовет процедуру RouterProcedure::index
                 RouterProcedure mc = new RouterProcedure();
+
                 //если будет вызов http://localhost/index/login, то будет искать процедуру index, передаст в параметр а login
                 string[] MasRoutePathFormat = RoutePath.Split('/');
                 System.Reflection.MethodInfo m = mc.GetType().GetMethod(MasRoutePathFormat[0]);
@@ -631,57 +670,58 @@ Connection.Close();
                 //connect - mysql соединение
                 try
                 {
-                    m.Invoke(mc, new Object[] { p, MasRoutePathFormat});
-                } catch (Exception)
+                    m.Invoke(mc, new Object[] { p, MasRoutePathFormat });
+                }
+                catch (Exception)
                 {
 
                     p.redirect("http://localhost:8080/index");
                     return;
-                } 
-                //Добавляем в HTMl голову и низ
-                p.HTML.Head = System.IO.File.ReadAllText(@"C:\Project\Access\d2\template/header.html");
-                p.HTML.Footer = System.IO.File.ReadAllText(@"C:\Project\Access\d2\template/footer.html");
+                }
+                //Сохраняем данные для сессии
+                Sessions.push();
                 //отправляем юзеру
-                p.SendToUsers();
+                p.SendToUsers(MasRoutePathFormat[0]);
                 connect.close();
             }
         }
 
-    }
+   }
     //Класс вызовов процедур (http://localhost/index -> вызовет процедуру RouterProcedure::index)
-    public class RouterProcedure:MyHttpServer
+    public class RouterProcedure : HttpServer
     {
         public void registration(HttpProcessor p, string[] route)
         {
- /*   
-            p.HTML.Body = System.IO.File.ReadAllText(@".\template/reg.html");
-            p.HTML.Body += "<b>" + route[1] + "</b>";
+            if (p.InputPOST("Password") != "null" & p.InputPOST("Username") != "null")
+                if (connect.insert_update("INSERT INTO users (`login`, `pass`, `rules`) VALUES('" + p.InputPOST("Username") + "', '" + p.InputPOST("Password") + "', '001');"))
+                    p.redirect("http://localhost:8080/login");
+        }
 
-            p.MasInputPost.ContainsKey("");
-            p.MasInputPost.ContainsValue("");*/
+        public void exit(HttpProcessor p, string[] route)
+        {
+            Sessions.exit();
+            p.redirect("http://localhost:8080/login");
         }
 
         public void index(HttpProcessor p, string[] route)
         {
-            p.HTML.Header.Add("HTTP/1.1", "200 OK");
-            p.HTML.Body = System.IO.File.ReadAllText(@"C:\Project\Access\d2\template/index.html");
-            if (connect.select("select * from users"))
-            {
-                while (connect.MyReader.Read())// Читаем
-                {
-                    // Каждое значение вытягиваем с помощью MySqlDataReader.GetValue(<номер значения в выборке>)
-                    p.HTML.Body += "{0} - {1} - {2} - {3}" + connect.MyReader.GetValue(0) + connect.MyReader.GetValue(1) + connect.MyReader.GetValue(2) + connect.MyReader.GetValue(3);
-                }
-            }
+            if (Sessions.item("auth") != "null")
+                p.HTML.Body.Add("welcome", "Добро пожаловать" + Sessions.item("login"));
+            else p.HTML.Body.Add("welcome", "Авторизируйтесь");
         }
 
         public void login(HttpProcessor p, string[] route)
         {
-            p.HTML.Header.Add("HTTP/1.1", "200 OK");
             if (p.InputPOST("Password") != "null" & p.InputPOST("Username") != "null")
-                connect.insert_update("INSERT INTO users (`login`, `pass`) VALUES('" + p.InputPOST("Username") + "', '" + p.InputPOST("Password") + "');");
-            p.HTML.Body = System.IO.File.ReadAllText(@"C:\Project\Access\d2\\template/login.html");
-            //p.HTML.Body += "<b>" + route[1] +"</b>";
+                if (connect.select("Select `id_users`, `login`, `rules` from `users` Where `login`='" + p.InputPOST("Username") + "' and `pass`='" + p.InputPOST("Password") + "';"))
+                   while (connect.MyReader.Read())// Читаем
+                    {
+                        Sessions.add("id_users", connect.MyReader.GetValue(0).ToString());
+                        Sessions.add("login", connect.MyReader.GetValue(1).ToString());
+                        Sessions.add("rules", connect.MyReader.GetValue(2).ToString());
+                        Sessions.add("auth", "1");
+                        p.redirect("http://localhost:8080/index");
+                    }
         }
     }
 
@@ -690,10 +730,13 @@ Connection.Close();
 
             HttpServer httpServer;
             if (args.GetLength(0) > 0) {
-                httpServer = new MyHttpServer(Convert.ToInt16(args[0]));
+                httpServer = new HttpServer();
+                httpServer.HttpServerP(Convert.ToInt16(args[0]));
             } else {
-                httpServer = new MyHttpServer(8080);
+                httpServer = new HttpServer();
+                httpServer.HttpServerP(8080);
             }
+
             Thread thread = new Thread(new ThreadStart(httpServer.listen));
             thread.Start();
             return 0;
