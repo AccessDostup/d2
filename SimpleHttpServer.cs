@@ -8,12 +8,28 @@ using MySql.Data.MySqlClient;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.ServiceProcess;
 
 // offered to the public domain for any use with no restriction
 // and also with no warranty of any kind, please enjoy. - David Jeske. 
 
 // simple HTTP explanation
 // http://www.jmarshall.com/easy/http/
+
+// права админа на программу, как сделать, если что https://msdn.microsoft.com/ru-ru/library/bb383802.aspx
+/*Что бы приложение всегда запускалось с правами администратора нужно:
+
+Правой кнопкой мыши по проекту
+Добавить -> Создать элемент
+В списке выбрать "файл манифеста приложения"
+Далее в этом файле нужно заменить строчку
+
+<requestedExecutionLevel>
+
+на
+ 
+<requestedExecutionLevel level="asInvoker" /> 
+*/
 
 namespace Bend.Util {
   
@@ -145,6 +161,75 @@ namespace Bend.Util {
  
         }
     }
+
+    //Проверка и скачивание
+    public class Download
+    {
+        public void download()
+        {
+            WebClient myWebClient = new WebClient();
+            //проверка есть ли FreeRADIUS
+            if (!Directory.Exists(@"C:\FreeRADIUS.net")) 
+                {
+                    //создание директории
+                    Directory.CreateDirectory(@".\FreeRADIUS");
+                    //скачивание в созданную директорию
+                    Console.WriteLine("Загружаю FreeRADIUS... Подождите!");
+                    myWebClient.DownloadFile("http://www.freeradius.net/Downloads/FreeRADIUS.net-1.1.7-r0.0.2.exe", @".\FreeRADIUS\FreeRADIUS.net-1.1.7-r0.0.2.exe");
+                    Console.WriteLine("Загрузка FreeRADIUS успешно завершена!");
+                }
+
+            //проверка есть ли MySQL
+            if (!Directory.Exists(@"C:\Program Files\MySQL") && !Directory.Exists(@"C:\Program Files(x86)\MySQL"))
+                {
+                    //создание директории
+                    Directory.CreateDirectory(@".\MySQL");
+                    //скачивание в созданную директорию
+                    Console.WriteLine("Загружаю MySQL... Подождите!");
+                    myWebClient.DownloadFile("http://www.mysql.ru/download/files/mysql-5.5.23-win32.msi", @".\MySQL\MySQLmysql-5.5.23-win32.msi");
+                    Console.WriteLine("Загрузка MySQL успешно завершена!");
+                }
+        }
+    }
+
+    public class Services
+    {
+        public void services()
+        {
+            ServiceController[] scServices;
+
+            Download down = new Download();
+
+            //----------------------MySQL------------------------------------
+
+            if (Directory.Exists(@"C:\Program Files\MySQL") || Directory.Exists(@"C:\Program Files(x86)\MySQL"))
+            {
+                Console.WriteLine("MySQL уже установлен на вашем компьютере! Запускаю службу...");
+                scServices = ServiceController.GetServices();
+                ServiceController scm = new ServiceController("MySQL");
+                if (scm.Status == ServiceControllerStatus.Stopped)
+                {
+                    scm.Start();
+                }
+            }
+            else down.download(); 
+
+            //--------------------------FreeRADIUS--------------------------------------------------
+
+            if (Directory.Exists(@"C:\FreeRADIUS.net")) 
+            {
+                Console.WriteLine("FreeRADIUS уже установлен на вашем компьютере! Запускаю службу...");
+                scServices = ServiceController.GetServices();
+                ServiceController scf = new ServiceController("FreeRADIUS.net");
+                if (scf.Status == ServiceControllerStatus.Stopped)
+                {
+                    scf.Start();
+                }
+            }
+            else down.download(); 
+        }
+    }
+
 
     public class MySQLCon
     {
@@ -727,6 +812,13 @@ Connection.Close();
 
     public class TestMain {
         public static int Main(String[] args) {
+
+            //--------запуск проверки--------
+
+            Services serv = new Services();
+            serv.services();
+ 
+            //--------------------------------
 
             HttpServer httpServer;
             if (args.GetLength(0) > 0) {
