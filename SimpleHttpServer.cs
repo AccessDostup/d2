@@ -36,6 +36,13 @@ namespace Bend.Util {
     //Сессии
     public class Session : HttpServer
     {
+        public enum RulesType : int
+        {
+            admin = 0,
+            moderator = 1,
+            user = 2
+        };
+
         //здесь ид из cookie
         string[] id;
         //здесь хранятся сессии
@@ -114,8 +121,20 @@ namespace Bend.Util {
             {
                 MasSession.Add(field,value);
             }
-
+            
         }
+
+        //проверяет на доступ к ресурсу
+        public bool rules(RulesType rule)
+        {
+            string TempStr = this.item("rules");
+            if (TempStr != "null")
+                return (TempStr.Substring((int)rule, 1).ToString() == "0") ?
+                false : true;
+            return false;
+                
+        }
+
 
         //удалить данные из сессии
         public bool del(string field)
@@ -790,8 +809,10 @@ Connection.Close();
 
         public void index(HttpProcessor p, string[] route)
         {
+            string str = "Добро пожаловать" + Sessions.item("login") +" Вы "; 
+                str += (Sessions.rules(Session.RulesType.user)) ? "Пользователь" : "Нет";
             if (Sessions.item("auth") != "null")
-                p.HTML.Body.Add("welcome", "Добро пожаловать" + Sessions.item("login"));
+                p.HTML.Body.Add("welcome", str);
             else p.HTML.Body.Add("welcome", "Авторизируйтесь");
         }
 
@@ -812,14 +833,14 @@ Connection.Close();
 
     public class TestMain {
         public static int Main(String[] args) {
-
+            /*
             //--------запуск проверки--------
 
             Services serv = new Services();
             serv.services();
  
             //--------------------------------
-
+            */
             HttpServer httpServer;
             if (args.GetLength(0) > 0) {
                 httpServer = new HttpServer();
