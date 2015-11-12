@@ -964,6 +964,7 @@ Connection.Close();
         }
 
    }
+
     //Класс вызовов процедур (http://localhost/index -> вызовет процедуру RouterProcedure::index)
     public class RouterProcedure : HttpServer
     {
@@ -988,6 +989,27 @@ Connection.Close();
             if (Sessions.item("auth") != "null")
                 p.HTML.Body.Add("welcome", str);
             else p.HTML.Body.Add("welcome", "Авторизируйтесь");
+        }
+
+        public void auth(HttpProcessor p, string[] route)
+        {
+           if (p.InputPOST("token") != "null")
+           {
+               System.Net.WebRequest req = System.Net.WebRequest.Create("https://ulogin.ru/token.php" + "?" + "token=" + p.InputPOST("token") + "&host=localhost");
+               System.Net.WebResponse resp = req.GetResponse();
+               System.IO.Stream stream = resp.GetResponseStream();
+               System.IO.StreamReader sr = new System.IO.StreamReader(stream);
+               string Out = sr.ReadToEnd();
+               sr.Close();
+               Out =  Out.Trim(new char [] {'{', '}'});
+               string[] TempStr = Out.Split(',');
+               foreach (string s in TempStr)
+               {
+                   string[] TempStr2 = s.Split(new string[] { Convert.ToChar(34).ToString() + ":" + Convert.ToChar(34).ToString() },StringSplitOptions.None);
+                   Sessions.add(TempStr2[0].Trim('"'), System.Text.RegularExpressions.Regex.Unescape(TempStr2[1].Trim('"')));
+               }
+
+           }
         }
 
         public void login(HttpProcessor p, string[] route)
