@@ -261,7 +261,7 @@ namespace Bend.Util {
                 id = new string[1];
                 id[0] = Simbol(46);
             }
-            while (connect.insert_update("INSERT INTO `sessions` (`id`, `ip_address`, `timestamp`) VALUES('" + id[0] + "', '0.0.0.0', now());") == false);
+            while (connect.insert_update("INSERT INTO `sessions` (`id`, `ip_address`, `timestamp`) VALUES(@0, '0.0.0.0', now());", new string[] {id[0]}) == false);
 
             p.HTML.Header.Add("Set-Cookie:", "id=" + id[0]);
 
@@ -274,12 +274,12 @@ namespace Bend.Util {
 
         public void delsession_time()
         {
-            connect.insert_update("DELETE FROM `sessions` WHERE TIMEDIFF(now(), `timestamp`) > TIME('00:15:00');");
+            connect.insert_update("DELETE FROM `sessions` WHERE TIMEDIFF(now(), `timestamp`) > TIME(@0);", new string[] { "00:15:00" });
         }
 
         public void exit()
         {
-            connect.insert_update("DELETE FROM `sessions` WHERE `id`='" + MasSession["id"] + "';");
+            connect.insert_update("DELETE FROM `sessions` WHERE `id`=@0;", new string[] { MasSession["id"].ToString()});
         }
 
 
@@ -332,7 +332,7 @@ namespace Bend.Util {
                     str += s.Key + "=" + s.Value + ";";
             }
 
-            connect.insert_update("UPDATE `sessions` set `timestamp`= now(), `data`='" + str + "';");
+            connect.insert_update("UPDATE `sessions` set `timestamp`= now(), `data`=@0;", new string[] { str });
 
         }
          
@@ -476,7 +476,7 @@ namespace Bend.Util {
             }
         }
 
-        public bool insert_update(string QueryStr)
+        public bool insert_update(string QueryStr, string[] val)
         {
             try
             {
@@ -484,9 +484,16 @@ namespace Bend.Util {
                 if (Connection == null || Connection.State != System.Data.ConnectionState.Open)
                     conn();
                 Query.CommandText = QueryStr;
-                bool outt = (Query.ExecuteNonQuery() > 0) ? true : false;
-                //Query.Dispose();
+                Query.Prepare();
 
+                for (int j = 0; j <= val.Length - 1; j++)
+                    {
+                        Query.Parameters.AddWithValue("@" + j, val[j]);
+                    }
+
+                    bool outt = (Query.ExecuteNonQuery() > 0) ? true : false;
+                //Query.Dispose();
+                    Query.Parameters.Clear();
                 return outt;
             }
             catch (MySqlException SSDB_Exception)
@@ -907,7 +914,7 @@ Connection.Close();
                     FS = new FileStream(@"C:\Project\Access\d2" + p.http_url, FileMode.Open, FileAccess.Read, FileShare.Read);
                     //Отправка Заголовка.
                     string Headers = "HTTP/1.1 200 OK\nContent-Type: " + ContentType + "\nContent-Length: " + FS.Length + "\n\n";
-                    byte[] HeadersBuffer = Encoding.ASCII.GetBytes(Headers);
+                    byte[] HeadersBuffer = Encoding.UTF8.GetBytes(Headers);
                     p.socket.GetStream().Write(HeadersBuffer, 0, HeadersBuffer.Length);
 
                     // Буфер для отправки клиенту данных
@@ -971,7 +978,7 @@ Connection.Close();
         public void registration(HttpProcessor p, string[] route)
         {
             if (p.InputPOST("Password") != "null" & p.InputPOST("Username") != "null")
-                if (connect.insert_update("INSERT INTO users (`login`, `pass`, `rules`) VALUES('" + p.InputPOST("Username") + "', '" + p.InputPOST("Password") + "', '001');"))
+                if (connect.insert_update("INSERT INTO users (`login`, `pass`, `rules`) VALUES(@0, @1, '001');", new string[] {p.InputPOST("Username"), p.InputPOST("Password")} ))
                     p.redirect("http://localhost:8080/login");
         }
 
