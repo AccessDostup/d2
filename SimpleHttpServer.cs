@@ -88,11 +88,11 @@ namespace Bend.Util {
 
                 // 01 это PDU Type или иногда называется SMS-SUBMIT. 01 означает, что сообщение передаваемое, а не получаемое 
                 // цифры 00 это TP-Message-Reference означают, что телефон/модем может установить количество успешных сообщений автоматически
-                // telnumber.Length.ToString("X2") выдаст нам длинну номера в 16-ричном формате
+                // telnumber.Length.Tostring("X2") выдаст нам длинну номера в 16-ричном формате
                 // 91 означает, что используется международный формат номера телефона
                 telnumber = "01" + "00" + telnumber.Length.ToString("X2") + "91" + EncodePhoneNumber(telnumber);
 
-                textsms = StringToUCS2(textsms);
+                textsms = stringToUCS2(textsms);
                 // 00 означает, что формат сообщения неявный. Это идентификатор протокола. Другие варианты телекс, телефакс, голосовое сообщение и т.п.
                 // 08 означает формат UCS2 - 2 байта на символ. Он проще, так что рассмотрим его.
                 // если вместо 08 указать 18, то сообщение не будет сохранено на телефоне. Получится flash сообщение
@@ -102,7 +102,7 @@ namespace Bend.Util {
                 // посылаем команду с длинной сообщения - количество октет в десятичной системе. то есть делим на два количество символов в сообщении
                 // если октет неполный, то получится в результате дробное число. это дробное число округляем до большего
                 double lenMes = textsms.Length / 2;
-                port.Write("AT+CMGS=" + (Math.Ceiling(lenMes)).ToString() + "\r\n");
+                port.Write("AT+CMGS=" + (Math.Ceiling(lenMes)) + "\r\n");
                 System.Threading.Thread.Sleep(500);
 
                 // номер sms-центра мы не указываем, считая, что практически во всех SIM картах он уже прописан
@@ -178,7 +178,7 @@ namespace Bend.Util {
             int i = 0;
             while (i < PhoneNumber.Length)
             {
-                result += PhoneNumber[i + 1].ToString() + PhoneNumber[i].ToString();
+                result += PhoneNumber[i + 1] + PhoneNumber[i];
                 i += 2;
             }
             return result.Trim();
@@ -186,7 +186,7 @@ namespace Bend.Util {
 
 
         // перекодирование текста смс в UCS2 
-        public static string StringToUCS2(string str)
+        public static string stringToUCS2(string str)
         {
             UnicodeEncoding ue = new UnicodeEncoding();
             byte[] ucs2 = ue.GetBytes(str);
@@ -545,7 +545,7 @@ Connection.Close();
         public HttpServer srv;
         private Stream inputStream;
         public StreamWriter outputStream;
-        //Маркер который отмечается чтобы понять будет перенаправление или нет.
+         //Маркер который отмечается чтобы понять будет перенаправление или нет.
         public struct MarkerRedirectType
         {
             public string url;
@@ -566,9 +566,9 @@ Connection.Close();
 
         //Переменная шаблонов
         public HTMLBody HTML;
-        public String http_method;
-        public String http_url;
-        public String http_protocol_versionstring;
+        public string http_method;
+        public string http_url;
+        public string http_protocol_versionstring;
         public Hashtable httpHeaders = new Hashtable();
 
 
@@ -624,7 +624,7 @@ Connection.Close();
         }
 
         public void parseRequest() {
-            String request = streamReadLine(inputStream);
+            string request = streamReadLine(inputStream);
             string[] tokens = request.Split(' ');
             if (tokens.Length != 3) {
                 throw new Exception("invalid http request line");
@@ -638,7 +638,7 @@ Connection.Close();
 
         public void readHeaders() {
             Console.WriteLine("readHeaders()");
-            String line;
+            string line;
             while ((line = streamReadLine(inputStream)) != null) {
                 if (line.Equals("")) {
                     Console.WriteLine("got headers");
@@ -649,7 +649,7 @@ Connection.Close();
                 if (separator == -1) {
                     throw new Exception("invalid http header line: " + line);
                 }
-                String name = line.Substring(0, separator);
+                string name = line.Substring(0, separator);
                 int pos = separator + 1;
                 while ((pos < line.Length) && (line[pos] == ' ')) {
                     pos++; // strip any spaces
@@ -683,7 +683,7 @@ Connection.Close();
                  content_len = Convert.ToInt32(this.httpHeaders["Content-Length"]);
                  if (content_len > MAX_POST_SIZE) {
                      throw new Exception(
-                         String.Format("POST Content-Length({0}) too big for this simple server",
+                         string.Format("POST Content-Length({0}) too big for this simple server",
                            content_len));
                  }
                  byte[] buf = new byte[BUF_SIZE];              
@@ -725,7 +725,7 @@ Connection.Close();
             foreach (string i in data)
             {
                 string[] InputPostTemp = i.Split('=');
-                MasInputPost.Add(InputPostTemp[0], InputPostTemp[1]);
+                MasInputPost.Add(InputPostTemp[0], Uri.UnescapeDataString(InputPostTemp[1]));
             }
             }
         }
@@ -742,7 +742,7 @@ Connection.Close();
                 foreach (string i in data)
                 {
                     string[] InputPostTemp = i.Split('=');
-                    MasInputGet.Add(InputPostTemp[0], InputPostTemp[1]);
+                    MasInputGet.Add(InputPostTemp[0], Uri.UnescapeDataString(InputPostTemp[1]));
                 }
             }
         }
@@ -1012,7 +1012,7 @@ Connection.Close();
                string[] TempStr = Out.Split(',');
                foreach (string s in TempStr)
                {
-                   string[] TempStr2 = s.Split(new string[] { Convert.ToChar(34).ToString() + ":" + Convert.ToChar(34).ToString() },StringSplitOptions.None);
+                   string[] TempStr2 = s.Split(new string[] { Convert.ToChar(34) + ":" + Convert.ToChar(34) },StringSplitOptions.None);
                    Sessions.add(TempStr2[0].Trim('"'), System.Text.RegularExpressions.Regex.Unescape(TempStr2[1].Trim('"')));
                }
 
@@ -1035,7 +1035,7 @@ Connection.Close();
     }
 
     public class TestMain {
-        public static int Main(String[] args) {
+        public static int Main(string[] args) {
             /*
             //--------запуск проверки--------
 
