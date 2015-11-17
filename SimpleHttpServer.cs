@@ -80,27 +80,27 @@ namespace Bend.Util {
         }
 
         //Проверка на целочисленное
-        private bool num(string num)
+        public bool num(string num)
         {
             Regex rgx = new Regex(@"^[0-9]+$", RegexOptions.IgnoreCase);
             return rgx.IsMatch(num);
         }
 
         //Проверка на буквы
-        private bool alpha(string text)
+        public bool alpha(string text)
         {
             Regex rgx = new Regex(@"^[A-zА-я]+$", RegexOptions.IgnoreCase);
             return rgx.IsMatch(text);
         }
 
         //Проверка на пустоту
-        private bool required(string text = "")
+        public bool required(string text = "")
         {
             return (text == "" || text == "null") ? false : true;
         }
 
         //Проверка на уникальность в БД
-        private bool is_unique(string text = "", string bd = "")
+        public bool is_unique(string text = "", string bd = "")
         {
             string[] ParsingBD = bd.Split('.');
             return (HttpServer.connect.select("Select `" + ParsingBD[1] + "` from `" + ParsingBD[0] + "` Where `" + ParsingBD[1] + "`='" + text + "';"))
