@@ -10,6 +10,8 @@ using System.Linq;
 using System.Text;
 using System.ServiceProcess;
 using System.IO.Ports;
+using System.Reflection;
+using System.Text.RegularExpressions;
 
 // offered to the public domain for any use with no restriction
 // and also with no warranty of any kind, please enjoy. - David Jeske. 
@@ -33,7 +35,64 @@ using System.IO.Ports;
 */
 
 namespace Bend.Util {
-  
+    //проверка на ввод данных
+    public class formvalidation
+    {
+        //Здесь храняться все данные для проверки и какием к ним правила применить
+        static Hashtable MasValidation = new Hashtable();
+
+        //функция которая запускает проверку 
+        public static bool Start(HttpProcessor p)
+        {   //передаем управление классом переменной о
+            Type MyClass = typeof(formvalidation);
+            object o = Activator.CreateInstance(MyClass);
+          
+            foreach (DictionaryEntry s in MasValidation)
+            {
+                //Узнаем какие правила будут использоваться 
+                string[] MasMethods = s.Value.ToString().Split('|');
+                
+                foreach (string rule in MasMethods)
+                {
+                    //запускаем нужный метод который был выбран для проверки 
+                  MethodInfo info = typeof(formvalidation).GetMethod(rule, BindingFlags.Instance | BindingFlags.NonPublic);    
+                     
+                  if (!(bool)info.Invoke(o ,new object[] {p.InputPOST((string)s.Key)}))
+                  {
+                      MasValidation.Clear();
+                      return false;
+                  }
+                }
+            }
+            return true;
+        }
+
+        //добавление в память текста и какими методами его проверять
+        public static void add(string text, string rules)
+        {
+            MasValidation.Add(text, rules);
+        }
+
+        //Проверка на целочисленное
+        private bool num(string num)
+        {
+            Regex rgx = new Regex(@"^[0-9]+$", RegexOptions.IgnoreCase);
+            return rgx.IsMatch(num);
+        }
+
+        //Проверка на буквы
+        private bool alpha(string text)
+        {
+            Regex rgx = new Regex(@"^[A-zА-я]+$", RegexOptions.IgnoreCase);
+            return rgx.IsMatch(text);
+        }
+
+        //Проверка на пустоту
+        private bool required(string text = "")
+        {
+            return (text == "" || text == "null") ? false : true;
+        }
+    }
     //отправка смс
     public static class SendSMS
     {
@@ -947,7 +1006,7 @@ Connection.Close();
 
                 //если будет вызов http://localhost/index/login, то будет искать процедуру index, передаст в параметр а login
                 string[] MasRoutePathFormat = RoutePath.Split('/');
-                System.Reflection.MethodInfo m = mc.GetType().GetMethod(MasRoutePathFormat[0]);
+                MethodInfo m = mc.GetType().GetMethod(MasRoutePathFormat[0]);
                 //Запускаем и передаем параметр:
                 //p-сервер,
                 //MasRoutePathFormat-путь по которуму пришел пользователь
@@ -977,9 +1036,23 @@ Connection.Close();
     {
         public void registration(HttpProcessor p, string[] route)
         {
-            if (p.InputPOST("Password") != "null" & p.InputPOST("Username") != "null")
-                if (connect.insert_update("INSERT INTO users (`login`, `pass`, `rules`) VALUES(@0, @1, '001');", new string[] {p.InputPOST("Username"), p.InputPOST("Password")} ))
-                    p.redirect("http://localhost:8080/login");
+            //Здесь мы видим как применяеться проверка данных
+            //Способ : p.InputPOST("Password") != "null" & p.InputPOST("Username") != "null"
+            //показывает нам как он много занимет места в коде и какой не практичный
+            //способ formvalidation.add(p.InputPOST("Password"), "num|required");
+            //показывает нам как можно выполнить любую проверку текста просто указывая их
+            //здесь мы задали чтобы данные не были пустыми и содержали целочисленный тип
+            formvalidation.add("Password", "required|num");
+            //здесь мы задали чтобы данные не были пустыми и содержали буквы англ и русс
+            formvalidation.add("Username", "required|alpha");
+            //здесь мы запускаем его и узнаем можно продолжать работать или просто пустить клиента на страницу registration
+            if (formvalidation.Start(p))
+            {
+                //старый способ проверки кода просто на существование строк
+                if (p.InputPOST("Password") != "null" & p.InputPOST("Username") != "null")
+                    if (connect.insert_update("INSERT INTO users (`login`, `pass`, `rules`) VALUES(@0, @1, '001');", new string[] { p.InputPOST("Username"), p.InputPOST("Password") }))
+                        p.redirect("http://localhost:8080/login");
+            }
         }
 
         public void exit(HttpProcessor p, string[] route)
@@ -996,6 +1069,20 @@ Connection.Close();
             if (Sessions.item("auth") != "null")
                 p.HTML.Body.Add("welcome", str);
             else p.HTML.Body.Add("welcome", "Авторизируйтесь");
+        }
+
+        public void admin(HttpProcessor p, string[] route)
+        {
+            if (Sessions.rules(Session.RulesType.admin) || Sessions.rules(Session.RulesType.moderator))
+            {
+                string str = "Добро пожаловать" + Sessions.item("login") + " Вы ";
+                //проверка сэссии пользователя и его прав.
+                str += (Sessions.rules(Session.RulesType.user)) ? "Пользователь" : "Нет";
+                if (Sessions.item("auth") != "null")
+                    p.HTML.Body.Add("welcome", str);
+                else p.HTML.Body.Add("welcome", "Авторизируйтесь");
+            }
+            else p.redirect("http://localhost:8080/index");
         }
 
         public void auth(HttpProcessor p, string[] route)
