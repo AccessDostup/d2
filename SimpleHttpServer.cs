@@ -54,10 +54,16 @@ namespace Bend.Util {
                 
                 foreach (string rule in MasMethods)
                 {
+                    string[] ParseRule = rule.TrimEnd(']').Split('[');
                     //запускаем нужный метод который был выбран для проверки 
-                  MethodInfo info = typeof(formvalidation).GetMethod(rule, BindingFlags.Instance | BindingFlags.NonPublic);    
-                     
-                  if (!(bool)info.Invoke(o ,new object[] {p.InputPOST((string)s.Key)}))
+                    MethodInfo info = typeof(formvalidation).GetMethod(ParseRule[0], BindingFlags.Instance | BindingFlags.NonPublic);    
+                     bool Out;
+                  if (ParseRule.Length >1)
+                      Out = (bool)info.Invoke(o ,new object[] {p.InputPOST((string)s.Key), ParseRule[1]});
+                    else
+                      Out = (bool)info.Invoke(o ,new object[] {p.InputPOST((string)s.Key)});
+                  
+                  if (!Out)
                   {
                       MasValidation.Clear();
                       return false;
@@ -91,6 +97,14 @@ namespace Bend.Util {
         private bool required(string text = "")
         {
             return (text == "" || text == "null") ? false : true;
+        }
+
+        //Проверка на уникальность в БД
+        private bool is_unique(string text = "", string bd = "")
+        {
+            string[] ParsingBD = bd.Split('.');
+            return (HttpServer.connect.select("Select `" + ParsingBD[1] + "` from `" + ParsingBD[0] + "` Where `" + ParsingBD[1] + "`='" + text + "';"))
+                ? false : true;
         }
     }
     //отправка смс
@@ -1044,7 +1058,9 @@ Connection.Close();
             //здесь мы задали чтобы данные не были пустыми и содержали целочисленный тип
             formvalidation.add("Password", "required|num");
             //здесь мы задали чтобы данные не были пустыми и содержали буквы англ и русс
-            formvalidation.add("Username", "required|alpha");
+            //также добавил проверку на уникальность в БД is_unique[users.login] users ->БД login -> поле где проверить, 
+            //ответ false если в БД уже такое есть.
+            formvalidation.add("Username", "required|alpha|is_unique[users.login]");
             //здесь мы запускаем его и узнаем можно продолжать работать или просто пустить клиента на страницу registration
             if (formvalidation.Start(p))
             {
