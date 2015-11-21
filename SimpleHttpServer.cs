@@ -207,9 +207,6 @@ namespace Bend.Util {
             return true;
         }
 
-
-
-
         private static void OpenPort(string com)
         {
 
@@ -257,12 +254,12 @@ namespace Bend.Util {
             return result.Trim();
         }
 
-
         // перекодирование текста смс в UCS2 
         public static string stringToUCS2(string str)
         {
             UnicodeEncoding ue = new UnicodeEncoding();
             byte[] ucs2 = ue.GetBytes(str);
+
 
             int i = 0;
             while (i < ucs2.Length)
@@ -274,11 +271,8 @@ namespace Bend.Util {
             }
             return BitConverter.ToString(ucs2).Replace("-", "");
         }
-
-
     }
     
-
     //Сессии
     public class Session : HttpServer
     {
@@ -838,15 +832,16 @@ Connection.Close();
             else
             {
                 HTML.Header.Add("HTTP/1.1", "200 OK");
+                HTML.Header.Add("Content-Type:", "text/html; charset=utf-8;");
                 //Добавляем в HTMl голову,тело, низ
                 Compiltemplate += System.IO.File.ReadAllText(@"C:\Project\Access\d2\template/header.html");
                 //проверяем на существование вызываемого шаблона страницы
                 if (System.IO.File.Exists(@"C:\Project\Access\d2\template/" + nametemplate + ".html"))
                     Compiltemplate += System.IO.File.ReadAllText(@"C:\Project\Access\d2\template/" + nametemplate + ".html");
                 else Compiltemplate += "Нет такого файла";
-                
-                Compiltemplate += System.IO.File.ReadAllText(@"C:\Project\Access\d2\template/footer.html");
 
+                Compiltemplate += System.IO.File.ReadAllText(@"C:\Project\Access\d2\template/footer.html");
+                
                 HTML.Body.Add("httppath","http://localhost:8080");
                 //Редактируем HTML заменой переменных данными
                 foreach (DictionaryEntry s in HTML.Body)
@@ -872,8 +867,9 @@ Connection.Close();
                 }
             }
 
+            
             //Отправка данных
-            outputStream.Write(CompilHeader + "\n" + Compiltemplate);           
+            outputStream.Write(CompilHeader + "\n" + Compiltemplate.Replace(Environment.NewLine, ""));           
         }
 
         //проверка на доступность переменной из MasInputPost если ее нет возвращает "null"
