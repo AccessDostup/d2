@@ -37,7 +37,7 @@ using System.Text.RegularExpressions;
 namespace Bend.Util {
     //проверка на ввод данных
     public class formvalidation
-    {
+    { 
         //Здесь храняться все данные для проверки и какием к ним правила применить
         static Hashtable MasValidation = new Hashtable();
 
@@ -56,7 +56,7 @@ namespace Bend.Util {
                 {
                     string[] ParseRule = rule.TrimEnd(']').Split('[');
                     //запускаем нужный метод который был выбран для проверки 
-                    MethodInfo info = typeof(formvalidation).GetMethod(ParseRule[0], BindingFlags.Instance | BindingFlags.NonPublic);    
+                    MethodInfo info = typeof(formvalidation).GetMethod(ParseRule[0], BindingFlags.Instance | BindingFlags.Public | BindingFlags.Static);    
                      bool Out;
                   if (ParseRule.Length >1)
                       Out = (bool)info.Invoke(o ,new object[] {p.InputPOST((string)s.Key), ParseRule[1]});
@@ -70,6 +70,7 @@ namespace Bend.Util {
                   }
                 }
             }
+            MasValidation.Clear();
             return true;
         }
 
@@ -80,44 +81,51 @@ namespace Bend.Util {
         }
 
         //Проверка на целочисленное
-        public bool num(string num)
+        public static bool num(string num)
         {
             Regex rgx = new Regex(@"^[0-9]+$", RegexOptions.IgnoreCase);
             return rgx.IsMatch(num);
         }
 
         //Проверка на буквы
-        public bool alpha(string text)
+        public static bool alpha(string text)
         {
             Regex rgx = new Regex(@"^[A-zА-я]+$", RegexOptions.IgnoreCase);
             return rgx.IsMatch(text);
         }
 
         //Проверка на пустоту
-        public bool required(string text = "")
+        public static bool required(string text = "")
         {
             return (text == "" || text == "null") ? false : true;
         }
 
         //Проверка на уникальность в БД
-        public bool is_unique(string text = "", string bd = "")
+        public static bool is_unique(string text = "", string bd = "")
         {
             string[] ParsingBD = bd.Split('.');
             return (HttpServer.connect.select("Select `" + ParsingBD[1] + "` from `" + ParsingBD[0] + "` Where `" + ParsingBD[1] + "`='" + text + "';"))
                 ? false : true;
         }
+
+        //Проверка на существоавние в БД
+        public static bool is_not_unique(string text = "", string bd = "")
+        {
+            string[] ParsingBD = bd.Split('.');
+            return (HttpServer.connect.select("Select `" + ParsingBD[1] + "` from `" + ParsingBD[0] + "` Where `" + ParsingBD[1] + "`='" + text + "';"))
+                ? true : false;
+        }
     }
     //отправка смс
     public static class SendSMS
     {
-        public static SerialPort port;
+        static SerialPort port;
 
         public static void Send(string smstext, string number, string com)
         {
             
             port = new SerialPort();
-            port.PortName = com;
-
+      
             Console.WriteLine("Отправка сообщения СМС");
 
             OpenPort(com);
@@ -132,8 +140,6 @@ namespace Bend.Util {
             {
                 Console.WriteLine("Произошла ошибка при отправке");
             }
-            Console.ReadLine();
-
             port.Close();
         }
 
@@ -175,7 +181,7 @@ namespace Bend.Util {
                 // посылаем команду с длинной сообщения - количество октет в десятичной системе. то есть делим на два количество символов в сообщении
                 // если октет неполный, то получится в результате дробное число. это дробное число округляем до большего
                 double lenMes = textsms.Length / 2;
-                port.Write("AT+CMGS=" + (Math.Ceiling(lenMes)) + "\r\n");
+                port.Write("AT+CMGS=" + (Math.Ceiling(lenMes)).ToString() + "\r\n");
                 System.Threading.Thread.Sleep(500);
 
                 // номер sms-центра мы не указываем, считая, что практически во всех SIM картах он уже прописан
@@ -209,7 +215,7 @@ namespace Bend.Util {
 
         private static void OpenPort(string com)
         {
-
+            port.PortName = com;
             port.BaudRate = 2400; // еще варианты 4800, 9600, 28800 или 56000
             port.DataBits = 7; // еще варианты 8, 9
 
@@ -237,8 +243,6 @@ namespace Bend.Util {
 
         }
 
-
-
         // перекодирование номера телефона для формата PDU
         public  static string EncodePhoneNumber(string PhoneNumber)
         {
@@ -248,7 +252,7 @@ namespace Bend.Util {
             int i = 0;
             while (i < PhoneNumber.Length)
             {
-                result += PhoneNumber[i + 1] + PhoneNumber[i];
+                result += PhoneNumber[i + 1].ToString() + PhoneNumber[i].ToString();
                 i += 2;
             }
             return result.Trim();
@@ -394,10 +398,8 @@ namespace Bend.Util {
             string str="";
 
             foreach (DictionaryEntry s in MasSession)
-            {
                 if (s.Key.ToString().IndexOf("HTTP") < 0 && s.Key.ToString().IndexOf("id") < 0)
                     str += s.Key + "=" + s.Value + ";";
-            }
 
             connect.insert_update("UPDATE `sessions` set `timestamp`= now(), `data`=@0;", new string[] { str });
 
@@ -814,6 +816,14 @@ Connection.Close();
             }
         }
 
+        //Функция создания вывода сообщений пользователям в HTML
+        public void MSG(string msg)
+        {
+            if (!HTML.Body.ContainsKey("msg"))
+                HTML.Body.Add("msg", "<div class='uk-alert uk-alert-warning' data-uk-alert><a href='' class='uk-alert-close uk-close'></a><p>");
+            HTML.Body["msg"] += msg + "<br>";
+        }
+
         //Собираем и отправляем HTML результат пользователю
         public void SendToUsers(string nametemplate)
         {
@@ -842,7 +852,11 @@ Connection.Close();
 
                 Compiltemplate += System.IO.File.ReadAllText(@"C:\Project\Access\d2\template/footer.html");
                 
-                HTML.Body.Add("httppath","http://localhost:8080");
+                //Здесь добавляем путь ко всем картинкам, css, js которые требуется загрузить
+                HTML.Body.Add("httppath", httpHeaders["Origin"]);
+                //Если сообщений для пользователя нет то добавляем пустую строку если есть добавляем конец строки
+                if (!HTML.Body.ContainsKey("msg")) HTML.Body.Add("msg", ""); else HTML.Body["msg"] += "</p></div>";
+
                 //Редактируем HTML заменой переменных данными
                 foreach (DictionaryEntry s in HTML.Body)
                 {
@@ -856,17 +870,10 @@ Connection.Close();
 
             //Считываем ключ и значение и собираем заголовок
             foreach (DictionaryEntry s in HTML.Header)
-            {
                 if (s.Key.ToString().IndexOf("HTTP") < 0)
-                {
                     CompilHeader += s.Key + " " + s.Value + "\n";
-                }
                 else
-                {
                     CompilHeader = s.Key + " " + s.Value + "\n" + CompilHeader;
-                }
-            }
-
             
             //Отправка данных
             outputStream.Write(CompilHeader + "\n" + Compiltemplate.Replace(Environment.NewLine, ""));           
@@ -875,7 +882,7 @@ Connection.Close();
         //проверка на доступность переменной из MasInputPost если ее нет возвращает "null"
         public string InputPOST(string name)
         {
-            return (MasInputPost.ContainsKey(name)) ? MasInputPost[name].ToString() : "null";
+            return (MasInputPost.ContainsKey(name)) ? (MasInputPost[name].ToString() != "") ? MasInputPost[name].ToString() : "null" : "null";
         }
 
         //проверка на доступность переменной из MasInputGet если ее нет возвращает "null"
@@ -913,7 +920,7 @@ Connection.Close();
                 thread.Start();
                 Thread.Sleep(1);
             }
-        }
+        }     
 
         //функция для созднии рандоманой строки
         public string Simbol(int count)
@@ -997,7 +1004,7 @@ Connection.Close();
                         // И передаем их клиенту
                         p.socket.GetStream().Write(Buffer, 0, Count);
                     }
-
+                    FS.Close();
                 }
                 catch (Exception)
                 {
@@ -1016,7 +1023,7 @@ Connection.Close();
 
                 //если будет вызов http://localhost/index/login, то будет искать процедуру index, передаст в параметр а login
                 string[] MasRoutePathFormat = RoutePath.Split('/');
-                MethodInfo m = mc.GetType().GetMethod(MasRoutePathFormat[0]);
+                MethodInfo m = mc.GetType().GetMethod(MasRoutePathFormat[0], BindingFlags.Instance | BindingFlags.Public);
                 //Запускаем и передаем параметр:
                 //p-сервер,
                 //MasRoutePathFormat-путь по которуму пришел пользователь
@@ -1062,7 +1069,7 @@ Connection.Close();
             {
                 //старый способ проверки кода просто на существование строк
                 if (p.InputPOST("Password") != "null" & p.InputPOST("Username") != "null")
-                    if (connect.insert_update("INSERT INTO users (`login`, `pass`, `rules`) VALUES(@0, @1, '001');", new string[] { p.InputPOST("Username"), p.InputPOST("Password") }))
+                    if (connect.insert_update("INSERT INTO `users` (`login`, `pass`, `rules`) VALUES(@0, @1, '001');", new string[] { p.InputPOST("Username"), p.InputPOST("Password") }))
                         p.redirect("http://localhost:8080/login");
             }
         }
@@ -1075,6 +1082,7 @@ Connection.Close();
 
         public void index(HttpProcessor p, string[] route)
         {
+            p.HTML.Body.Add("title", "Начало всех начал"); 
             string str = "Добро пожаловать" + Sessions.item("login") +" Вы "; 
             //проверка сэссии пользователя и его прав.
                 str += (Sessions.rules(Session.RulesType.user)) ? "Пользователь" : "Нет";
@@ -1085,6 +1093,7 @@ Connection.Close();
 
         public void admin(HttpProcessor p, string[] route)
         {
+            p.HTML.Body.Add("title", "Панель управления"); 
             if (Sessions.rules(Session.RulesType.admin) || Sessions.rules(Session.RulesType.moderator))
             {
                 string str = "Добро пожаловать" + Sessions.item("login") + " Вы ";
@@ -1097,10 +1106,30 @@ Connection.Close();
             else p.redirect("http://localhost:8080/index");
         }
 
+        private void auth_reg_radius(HttpProcessor p)
+        {
+            string pass;
+            do
+            {
+                pass = Simbol(8);
+            }
+            while (formvalidation.is_unique(pass, "radcheck.Value"));
+
+            connect.insert_update("INSERT INTO `users` (`login`, `e-mail`, `fio`, `name_s_net`, `rules`) VALUES(@0, @1, @2, @3, '001');",
+                new string[] {  });
+
+        }
+
         public void auth(HttpProcessor p, string[] route)
         {
-           if (p.InputPOST("token") != "null")
+           p.HTML.Body.Add("title", "Авторизация");
+            //Удаляем все пароли которые были созданы больше 5 минут назад и не были активированы
+           connect.insert_update("DELETE FROM `secret_num` WHERE TIMEDIFF(now(), `date`) > TIME(@0);", new string[] { "00:05:00" });
+           //проверяем человек авторизировался через Социальные сети или нет
+            if (p.InputPOST("token") != "null")
            {
+               //С помощью токена вырываем данные с сайта для получения всей информации о человеке
+               Hashtable Temp = new Hashtable();
                System.Net.WebRequest req = System.Net.WebRequest.Create("https://ulogin.ru/token.php" + "?" + "token=" + p.InputPOST("token") + "&host=localhost");
                System.Net.WebResponse resp = req.GetResponse();
                System.IO.Stream stream = resp.GetResponseStream();
@@ -1109,12 +1138,65 @@ Connection.Close();
                sr.Close();
                Out =  Out.Trim(new char [] {'{', '}'});
                string[] TempStr = Out.Split(',');
+
                foreach (string s in TempStr)
                {
                    string[] TempStr2 = s.Split(new string[] { Convert.ToChar(34) + ":" + Convert.ToChar(34) },StringSplitOptions.None);
-                   Sessions.add(TempStr2[0].Trim('"'), System.Text.RegularExpressions.Regex.Unescape(TempStr2[1].Trim('"')));
+                   Temp.Add(TempStr2[0].Trim('"'), System.Text.RegularExpressions.Regex.Unescape(TempStr2[1].Trim('"')));
                }
+                //Проверяем существует ли такой логин(идентификатор) в БД
+               if (formvalidation.is_unique(Temp["identity"].ToString(), "users.login"))
+                   //добавляем данныем в БД
+                   connect.insert_update("INSERT INTO `users` (`login`, `e-mail`, `fio`, `name_s_net`, `rules`) VALUES(@0, @1, @2, @3, '001');",
+                       new string[] { Temp["identity"].ToString(), Temp["email"].ToString(), Temp["first_name"].ToString() + Temp["last_name"].ToString(), Temp["network"].ToString() });
+           
+           }
+            //Если в форме был введен телефон, то...
+           else if (p.InputPOST("Phone") != "null")
+           {
+               //Создаем пароль который будет передан в смс
+               string SecretPass = Simbol(5);
 
+               //добавляем в проверку номер телефона (не должен быть пустым, должен состоять из цифр, и должен быть в Бд уникальным)
+               formvalidation.add("Phone", "required|num|is_unique[users.phone]");
+               //Запускаем проверку
+               if (formvalidation.Start(p))
+                   //Вставляем в таблицу нового юзера
+                   connect.insert_update("INSERT INTO `users` (`phone`, `rules`) VALUES(@0, '001');", new string[] { p.InputPOST("Phone") });
+               //Проверяем на существование и сразу ищем ИД пользователя которого добавили 
+               if (connect.select("Select `id_users` from `users` Where `phone`='" + p.InputPOST("Phone") + "' LIMIT 1;"))
+               {
+                   //читаем перву строку данных полученную из бд
+                   connect.MyReader.Read();
+                   //вставляем в таблицу secret_num пароль и ид пользователя 
+                   //который будет использоваться при вводе для проверки
+                   connect.insert_update("INSERT INTO `secret_num` (`id_users`, `num`, `date`) VALUES(@0, @1, now());", new string[] { connect.MyReader.GetValue(0).ToString(), SecretPass });
+                   //отправка смс
+                   SendSMS.Send(SecretPass, "+7" + p.InputPOST("Phone"), "COM10");
+               }
+               else
+               {
+                   //выдаем сообщение Пользователю Ошибка
+                   p.MSG("Ошибочка");
+               }
+           }
+            //проверка на ввод пароля для доступа в интернет пользователем
+           else if (p.InputPOST("Password") != "null")
+           {
+               //Проверка пароля, он должен должен быть не пустым и не уникальным(существовать) в БД
+               formvalidation.add("Password", "required|is_not_unique[secret_num.num]");
+               //Запуск проверки
+               if (formvalidation.Start(p))
+               {
+                   //Если все успешно удаляем пароль
+                   connect.insert_update("DELETE FROM `secret_num` WHERE `num` = @0;", new string[] { p.InputPOST("Password") });
+                   //и выдает сообщение пользователю
+                   p.MSG("Все круто");
+               }
+               else
+               {
+                   p.MSG("Не верно введен пароль!");
+               }
            }
         }
 
@@ -1162,6 +1244,3 @@ Connection.Close();
     }
 
 }
-
-
-
